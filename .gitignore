@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.egg-info/
+
+# frontend build artifacts (rebuilt at deploy time onto the `deploy` branch)
+frontend/node_modules/
+frontend/dist/
+backend/app/static/*
+!backend/app/static/.gitkeep
+
+# misc
+.DS_Store
+*.log
+.pytest_cache/
+.coverage

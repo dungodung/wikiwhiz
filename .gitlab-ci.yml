@@ -1,0 +1,21 @@
+# Builds the React frontend and publishes prebuilt static assets onto the
+# `deploy` branch, which is the single-runtime (Python) artifact that
+# Toolforge Build Service actually builds from. See docs/deployment-toolforge.md.
+stages:
+  - build-deploy-branch
+
+build-deploy-branch:
+  stage: build-deploy-branch
+  image: node:20-alpine
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - apk add --no-cache git rsync openssh-client
+    - cd frontend && npm ci && npm run build && cd ..
+    - rsync -a --delete frontend/dist/ backend/app/static/
+    - git config user.email "ci@wikiwhiz.toolforge.org"
+    - git config user.name "WikiWhiz CI"
+    - git checkout -B deploy
+    - git add -f backend/app/static
+    - git commit -m "deploy: rebuild frontend from ${CI_COMMIT_SHORT_SHA}" || echo "nothing to commit"
+    - git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD:deploy -f

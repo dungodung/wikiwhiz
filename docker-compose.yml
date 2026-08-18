@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wikiwhiz
+      MYSQL_USER: wikiwhiz
+      MYSQL_PASSWORD: wikiwhiz
+    ports:
+      - "3306:3306"
+    volumes:
+      - wikiwhiz-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-uwikiwhiz", "-pwikiwhiz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    env_file: .env
+    environment:
+      DB_HOST: db
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app/backend
+      - ./wsgi.py:/app/wsgi.py
+    depends_on:
+      db:
+        condition: service_healthy
+    command: flask --app wsgi run --host=0.0.0.0 --port=5000 --debug
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+
+volumes:
+  wikiwhiz-db-data:
