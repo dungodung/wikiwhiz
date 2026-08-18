@@ -18,16 +18,8 @@ import sys
 
 from _db import session_scope
 
-from backend.app.models.article import Article
+from backend.app.lib.clue_guard import leaks_title
 from backend.app.models.clue import CLUE_TYPES, Clue
-
-
-def _leaks_title(clue_text: str, article: Article) -> bool:
-    haystack = clue_text.casefold()
-    for candidate in (article.wiki_title, article.display_title):
-        if candidate and candidate.casefold() in haystack:
-            return True
-    return False
 
 
 def main() -> int:
@@ -46,7 +38,7 @@ def main() -> int:
             print(f"ERROR: no article with id {args.article_id}", file=sys.stderr)
             return 1
 
-        if _leaks_title(args.text, article):
+        if leaks_title(args.text, article):
             print(
                 f"REJECTED: clue text leaks the article title "
                 f"({article.display_title!r}). Redraft and retry.",

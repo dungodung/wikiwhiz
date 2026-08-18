@@ -67,4 +67,4 @@ def me():
     if user is None:
         session.pop("user_id", None)
         return jsonify({"authenticated": False})
-    return jsonify({"authenticated": True, "username": user.wikimedia_username})
+    return jsonify({"authenticated": True, "username": user.wikimedia_username, "is_admin": user.is_admin})

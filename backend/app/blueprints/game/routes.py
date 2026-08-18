@@ -1,7 +1,9 @@
 import uuid
+from datetime import date as date_cls
 
 from flask import Blueprint, current_app, jsonify, request, session
 
+from ...lib import hint_search
 from ...lib.mediawiki_api import MediaWikiClient
 from . import service
 
@@ -45,11 +47,17 @@ def _degrees_config() -> dict:
     }
 
 
-@game_bp.get("/today")
-def today():
-    daily_challenge = service.get_todays_challenge()
+def _parse_date(date_str: str) -> date_cls | None:
+    try:
+        return date_cls.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+
+def _get_day_state(target_date: date_cls):
+    daily_challenge = service.get_challenge_for_date(target_date)
     if daily_challenge is None:
-        return jsonify({"error": "no_challenge_scheduled"}), 503
+        return jsonify({"error": "no_challenge_scheduled"}), 404
 
     user_id, anon_token, new_cookie_value = _get_identity()
     session_row = service.get_or_create_session(daily_challenge, user_id, anon_token)
@@ -61,11 +69,10 @@ def today():
     return response
 
 
-@game_bp.post("/guess")
-def guess():
-    daily_challenge = service.get_todays_challenge()
+def _post_day_guess(target_date: date_cls):
+    daily_challenge = service.get_challenge_for_date(target_date)
     if daily_challenge is None:
-        return jsonify({"error": "no_challenge_scheduled"}), 503
+        return jsonify({"error": "no_challenge_scheduled"}), 404
 
     user_id, anon_token, new_cookie_value = _get_identity()
     session_row = service.get_or_create_session(daily_challenge, user_id, anon_token)
@@ -90,3 +97,65 @@ def guess():
     if new_cookie_value:
         _set_anon_cookie(response, new_cookie_value)
     return response
+
+
+@game_bp.get("/today")
+def today():
+    return _get_day_state(service.today_utc())
+
+
+@game_bp.post("/guess")
+def guess():
+    return _post_day_guess(service.today_utc())
+
+
+@game_bp.get("/archive")
+def archive():
+    user_id, anon_token, new_cookie_value = _get_identity()
+    entries = service.list_archive(user_id, anon_token)
+    response = jsonify({"days": entries})
+    if new_cookie_value:
+        _set_anon_cookie(response, new_cookie_value)
+    return response
+
+
+@game_bp.get("/day/<date_str>")
+def day(date_str: str):
+    target_date = _parse_date(date_str)
+    if target_date is None:
+        return jsonify({"error": "invalid_date"}), 400
+    return _get_day_state(target_date)
+
+
+@game_bp.post("/day/<date_str>/guess")
+def day_guess(date_str: str):
+    target_date = _parse_date(date_str)
+    if target_date is None:
+        return jsonify({"error": "invalid_date"}), 400
+    return _post_day_guess(target_date)
+
+
+@game_bp.get("/day/<date_str>/hint")
+def hint(date_str: str):
+    target_date = _parse_date(date_str)
+    if target_date is None:
+        return jsonify({"error": "invalid_date"}), 400
+
+    daily_challenge = service.get_challenge_for_date(target_date)
+    if daily_challenge is None:
+        return jsonify({"error": "no_challenge_scheduled"}), 404
+
+    pattern = request.args.get("pattern", "")
+    article = daily_challenge.article
+    total_letters = sum(tok["len"] for tok in article.slot_pattern if tok["type"] == "word")
+
+    if len(pattern) != total_letters:
+        return jsonify({"error": "pattern_length_mismatch", "expected_length": total_letters}), 400
+
+    try:
+        hint_search.build_regex(article.slot_pattern, pattern)  # validates pattern chars up front
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    result = hint_search.search_titles_by_regex(_mediawiki_client(), article.slot_pattern, pattern)
+    return jsonify({"matches": result.titles, "truncated": result.truncated, "unavailable": result.unavailable})

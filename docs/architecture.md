@@ -50,6 +50,34 @@ minimum-clue-count gate) every time.
 once when the scheduled-but-unplayed day count drops to `LOW_POOL_THRESHOLD`
 (default 3) — see `lib/notifications.py` and `models/pool_alert.py`.
 
+## Post-launch additions
+
+- **Archive/replay**: `GET /api/game/archive`, `/api/game/day/<date>`,
+  `POST /api/game/day/<date>/guess` reuse the same `game_sessions`/
+  `guess_attempts` tables (already keyed by daily_challenge_id, not date).
+  `service.process_guess` only calls `_update_user_stats` when
+  `daily_challenge.challenge_date == today` — replaying an old day never
+  touches streaks/win_distribution.
+- **Hint mode**: `GET /api/game/day/<date>/hint?pattern=...`
+  (`backend/app/lib/hint_search.py`). Player fills in any subset of letter
+  boxes; the server builds a plain `intitle:"..."` CirrusSearch keyword query
+  from the longest known literal run to fetch ~50 candidates, then **locally
+  re-verifies every candidate with a Python regex** built from the puzzle's
+  exact `slot_pattern` before returning anything. This two-step design exists
+  because CirrusSearch's documented `intitle:/regex/` feature did *not*
+  reliably filter to the regex in live testing against production
+  en.wikipedia.org (returned titles that plainly didn't match) — see the
+  regression test `test_search_locally_filters_out_noisy_candidates` in
+  `backend/tests/test_hint_search.py`.
+- **Admin panel**, gated by `User.is_admin` (bootstrap the first admin via
+  `scripts/promote_admin.py --username <name>`, after they've logged in once
+  — there's no other way to create the first admin). All mutations under
+  `/api/admin/*` (`backend/app/blueprints/admin/routes.py`) are blocked once
+  an article's daily_challenge date is today or in the past
+  (`_article_is_locked`), so nothing a player has already seen can change
+  underneath them. Shares its title-leak guard and scheduling logic with the
+  CLI scripts via `lib/clue_guard.py` / `lib/scheduling.py`.
+
 ## What's implemented vs. what's next
 
 Implemented and tested (backend unit tests + a live end-to-end HTTP smoke

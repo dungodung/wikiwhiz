@@ -2,27 +2,38 @@
 // (Article.slot_pattern, see backend/app/lib/slot_pattern.py). Letters stay
 // blank until the puzzle is won/lost, at which point solved_answer_title is
 // walked in lockstep with the pattern to fill each slot in.
+
+// Pure transform: annotate each token with its starting offset into
+// revealedTitle, without mutating a loop variable during render.
+function withOffsets(slotPattern) {
+  return slotPattern.reduce(
+    (acc, token) => {
+      const charsConsumed = token.type === 'word' ? token.len : token.type === 'punct' || token.type === 'space' ? 1 : 0
+      acc.tokens.push({ token, offset: acc.cursor })
+      acc.cursor += charsConsumed
+      return acc
+    },
+    { tokens: [], cursor: 0 },
+  ).tokens
+}
+
 export default function WordSlots({ slotPattern, revealedTitle }) {
-  let cursor = 0
+  const tokens = withOffsets(slotPattern)
 
   return (
     <div className="word-slots" role="group" aria-label="Answer slots">
-      {slotPattern.map((token, i) => {
+      {tokens.map(({ token, offset }, i) => {
         if (token.type === 'space') {
-          if (revealedTitle) cursor += 1
           return <span key={i} className="word-slots__gap" />
         }
         if (token.type === 'punct') {
-          const ch = revealedTitle ? revealedTitle[cursor] : token.char
-          if (revealedTitle) cursor += 1
           return (
             <span key={i} className="word-slots__punct">
-              {ch}
+              {revealedTitle ? revealedTitle[offset] : token.char}
             </span>
           )
         }
-        const letters = revealedTitle ? revealedTitle.slice(cursor, cursor + token.len) : null
-        if (revealedTitle) cursor += token.len
+        const letters = revealedTitle ? revealedTitle.slice(offset, offset + token.len) : null
         return (
           <span key={i} className="word-slots__word">
             {Array.from({ length: token.len }).map((_, j) => (

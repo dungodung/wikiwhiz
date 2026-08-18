@@ -4,14 +4,20 @@ import { api, LOGIN_URL } from '../api/client'
 export const useAuthStore = create((set) => ({
   authenticated: false,
   username: null,
+  isAdmin: false,
   checked: false,
 
   checkAuth: async () => {
     try {
       const data = await api.me()
-      set({ authenticated: data.authenticated, username: data.username || null, checked: true })
+      set({
+        authenticated: data.authenticated,
+        username: data.username || null,
+        isAdmin: data.is_admin || false,
+        checked: true,
+      })
     } catch {
-      set({ authenticated: false, username: null, checked: true })
+      set({ authenticated: false, username: null, isAdmin: false, checked: true })
     }
   },
 
@@ -21,6 +27,6 @@ export const useAuthStore = create((set) => ({
 
   logout: async () => {
     await api.logout()
-    set({ authenticated: false, username: null })
+    set({ authenticated: false, username: null, isAdmin: false })
   },
 }))

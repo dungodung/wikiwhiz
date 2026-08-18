@@ -48,6 +48,26 @@ class MediaWikiClient:
             return {"pageid": int(pageid), "title": page["title"]}
         return None
 
+    def search_intitle(self, query: str, limit: int = 50, timeout: float = _DEFAULT_TIMEOUT) -> dict:
+        """Plain CirrusSearch `intitle:` keyword search -- used as the
+        candidate-recall step for hint-mode autocomplete. See
+        backend/app/lib/hint_search.py for why this isn't a regex search:
+        CirrusSearch's `intitle:/regex/` feature did not, in live testing,
+        reliably filter results to the regex (returned plenty of titles that
+        didn't match at all), so it's used here only to narrow the field;
+        the real match check is a local Python regex over the results.
+        """
+        return self.query(
+            {
+                "list": "search",
+                "srsearch": query,
+                "srnamespace": 0,
+                "srlimit": limit,
+                "srprop": "",
+            },
+            timeout=timeout,
+        )
+
     def search_title(self, text: str, timeout: float = _DEFAULT_TIMEOUT) -> dict | None:
         """Best-effort free-text search, for guesses that aren't an exact title."""
         data = self.query(

@@ -15,11 +15,9 @@ import sys
 
 from _db import session_scope
 
+from backend.app.lib.clue_guard import can_promote_to_ready
 from backend.app.lib.slot_pattern import tokenize_title_to_slots
 from backend.app.models.article import Article
-from backend.app.models.clue import Clue
-
-MIN_CLUES_FOR_READY = 5
 
 
 def main() -> int:
@@ -44,15 +42,11 @@ def main() -> int:
                 return 1
 
             if args.set_status == "ready":
-                clue_count = (
-                    session.query(Clue)
-                    .filter_by(article_id=article.id, is_title_leaking=False)
-                    .count()
-                )
-                if clue_count < MIN_CLUES_FOR_READY:
+                ok, clue_count = can_promote_to_ready(session, article)
+                if not ok:
                     print(
                         f"ERROR: article {article.id} has only {clue_count} non-leaking "
-                        f"clues, needs >= {MIN_CLUES_FOR_READY} before it can go 'ready'",
+                        f"clues, needs >= 5 before it can go 'ready'",
                         file=sys.stderr,
                     )
                     return 1

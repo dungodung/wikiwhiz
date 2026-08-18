@@ -4,6 +4,7 @@ Kept independent of Flask request/response objects (routes.py handles cookies
 and JSON) so it's unit-testable directly.
 """
 
+from datetime import date as date_cls
 from datetime import datetime, timezone
 
 from ...extensions import db
@@ -25,9 +26,49 @@ class GameError(Exception):
         self.status_code = status_code
 
 
+def today_utc() -> date_cls:
+    return datetime.now(timezone.utc).date()
+
+
+def get_challenge_for_date(target_date: date_cls) -> DailyChallenge | None:
+    """Only ever returns challenges for today or the past -- a future date is
+    not yet revealed to players (admins browse future schedule via the admin
+    API instead, see blueprints/admin/routes.py).
+    """
+    if target_date > today_utc():
+        return None
+    return DailyChallenge.query.filter_by(challenge_date=target_date).first()
+
+
 def get_todays_challenge() -> DailyChallenge | None:
-    today = datetime.now(timezone.utc).date()
-    return DailyChallenge.query.filter_by(challenge_date=today).first()
+    return get_challenge_for_date(today_utc())
+
+
+def list_archive(user_id: int | None, anon_token: str | None) -> list[dict]:
+    """Past + today's challenges with this identity's status, for the
+    calendar picker. Does not include future (unscheduled-to-players) dates.
+    """
+    challenges = (
+        DailyChallenge.query.filter(DailyChallenge.challenge_date <= today_utc())
+        .order_by(DailyChallenge.challenge_date.desc())
+        .all()
+    )
+    if not challenges:
+        return []
+
+    challenge_ids = [c.id for c in challenges]
+    query = GameSession.query.filter(GameSession.daily_challenge_id.in_(challenge_ids))
+    sessions = query.filter_by(user_id=user_id).all() if user_id else query.filter_by(anon_token=anon_token).all()
+    session_by_challenge = {s.daily_challenge_id: s for s in sessions}
+
+    return [
+        {
+            "challenge_date": c.challenge_date.isoformat(),
+            "is_today": c.challenge_date == today_utc(),
+            "status": session_by_challenge[c.id].status if c.id in session_by_challenge else "not_started",
+        }
+        for c in challenges
+    ]
 
 
 def get_or_create_session(
@@ -90,6 +131,7 @@ def serialize_state(session_row: GameSession, daily_challenge: DailyChallenge, a
 
     state = {
         "challenge_date": daily_challenge.challenge_date.isoformat(),
+        "is_today": daily_challenge.challenge_date == today_utc(),
         "slot_pattern": article.slot_pattern,
         "clues_revealed": ordered_clues,
         "total_clues_available": len(daily_challenge.clue_order),
@@ -105,7 +147,17 @@ def serialize_state(session_row: GameSession, daily_challenge: DailyChallenge, a
 def _update_user_stats(user_id: int, won: bool, attempt_number: int | None) -> None:
     stats = db.session.get(UserStats, user_id)
     if stats is None:
-        stats = UserStats(user_id=user_id, win_distribution={})
+        # Column defaults (default=0) only apply at flush/insert time, not on
+        # the freshly-constructed Python object -- set them explicitly here
+        # since we mutate (+=) them immediately, before any flush happens.
+        stats = UserStats(
+            user_id=user_id,
+            games_played=0,
+            games_won=0,
+            win_distribution={},
+            current_streak=0,
+            max_streak=0,
+        )
         db.session.add(stats)
 
     stats.games_played += 1
@@ -192,7 +244,11 @@ def process_guess(
     else:
         session_row.clues_revealed = min(session_row.clues_revealed + 1, total_clues)
 
-    if session_row.status in ("won", "lost") and session_row.user_id:
+    # Only today's puzzle counts toward stats -- replaying an archived day
+    # (see get_challenge_for_date / list_archive) must not perturb streaks,
+    # win distribution, or games_played.
+    counts_toward_stats = daily_challenge.challenge_date == today_utc()
+    if session_row.status in ("won", "lost") and session_row.user_id and counts_toward_stats:
         _update_user_stats(
             session_row.user_id,
             won=session_row.status == "won",

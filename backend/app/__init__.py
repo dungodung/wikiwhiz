@@ -22,6 +22,7 @@ def create_app(config_name: str = "production") -> Flask:
 
     from . import models  # noqa: F401 registers models with SQLAlchemy metadata
 
+    from .blueprints.admin.routes import admin_bp
     from .blueprints.auth.routes import auth_bp
     from .blueprints.game.routes import game_bp
     from .blueprints.info.routes import info_bp
@@ -31,6 +32,7 @@ def create_app(config_name: str = "production") -> Flask:
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(stats_bp, url_prefix="/api/stats")
     app.register_blueprint(info_bp, url_prefix="/api/info")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")

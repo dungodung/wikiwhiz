@@ -1,14 +1,10 @@
-import { useState } from 'react'
 import OnScreenKeyboard from './OnScreenKeyboard'
 
-export default function GuessInput({ onSubmit, disabled }) {
-  const [value, setValue] = useState('')
-
+export default function GuessInput({ value, onChange, onSubmit, disabled }) {
   const submit = () => {
     const trimmed = value.trim()
     if (!trimmed || disabled) return
     onSubmit(trimmed)
-    setValue('')
   }
 
   return (
@@ -24,7 +20,7 @@ export default function GuessInput({ onSubmit, disabled }) {
           className="guess-input__field"
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           placeholder="Type your guess…"
           disabled={disabled}
           aria-label="Your guess"
@@ -34,8 +30,8 @@ export default function GuessInput({ onSubmit, disabled }) {
         </button>
       </form>
       <OnScreenKeyboard
-        onKey={(k) => setValue((v) => v + k)}
-        onBackspace={() => setValue((v) => v.slice(0, -1))}
+        onKey={(k) => onChange(value + k)}
+        onBackspace={() => onChange(value.slice(0, -1))}
         onEnter={submit}
       />
     </div>

@@ -11,7 +11,7 @@ upgrade` (see README.md). All tables are InnoDB/utf8mb4.
 | `daily_challenges` | One row per UTC calendar day. `clue_order` (JSON) is the frozen, pre-randomized list of clue ids for that day — request handlers never re-randomize. |
 | `link_cache_nodes` / `link_cache_meta` | The degrees-of-Wikipedia precomputed neighborhood cache per answer article, plus live-BFS-discovered nodes written back opportunistically. |
 | `title_resolutions` | Global cache: normalized free-text guess → resolved Wikipedia article. Independent of which answer article is being played. |
-| `users` | Wikimedia identity only (`wikimedia_sub`, `wikimedia_username`). No OAuth tokens stored. |
+| `users` | Wikimedia identity only (`wikimedia_sub`, `wikimedia_username`, `is_admin`). No OAuth tokens stored. First admin is bootstrapped via `scripts/promote_admin.py`. |
 | `game_sessions` | One per (identity, daily_challenge) pair — identity is either `user_id` or an anonymous cookie token. |
 | `guess_attempts` | Every guess ever made, with its scored lexical bucket and degrees result. |
 | `user_stats` | Aggregated per-user stats, including `win_distribution` (JSON, e.g. `{"1": 2, "3": 1, "failed": 1}`). |
