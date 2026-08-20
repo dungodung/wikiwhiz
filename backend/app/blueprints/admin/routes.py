@@ -11,6 +11,7 @@ from datetime import date as date_cls
 from datetime import timedelta
 
 from flask import Blueprint, current_app, jsonify, request
+from sqlalchemy import and_, case, func
 
 from ...extensions import db
 from ...lib.authz import require_admin
@@ -22,6 +23,7 @@ from ...blueprints.game.service import today_utc
 from ...models.article import Article
 from ...models.clue import CLUE_TYPES, Clue
 from ...models.daily_challenge import DailyChallenge
+from ...models.session import GameSession
 from ...models.user import User
 
 admin_bp = Blueprint("admin", __name__)
@@ -494,3 +496,55 @@ def unschedule_date(date_str: str):
     unschedule_article(db.session, challenge)
     db.session.commit()
     return "", 204
+
+
+# --- Article stats ---------------------------------------------------------
+
+@admin_bp.get("/article-stats")
+@require_admin
+def article_stats():
+    """Per-article play stats for every daily_challenge from the start of
+    history through today (future/unplayed challenges have no sessions yet,
+    so they're excluded rather than shown as a row of zeros).
+    """
+    won_registered = and_(GameSession.status == "won", GameSession.user_id.isnot(None))
+    lost_registered = and_(GameSession.status == "lost", GameSession.user_id.isnot(None))
+
+    rows = (
+        db.session.query(
+            Article.id.label("article_id"),
+            Article.display_title,
+            DailyChallenge.challenge_date,
+            func.count(GameSession.id).label("attempted"),
+            func.sum(case((GameSession.status == "won", 1), else_=0)).label("won_total"),
+            func.sum(case((won_registered, 1), else_=0)).label("won_registered"),
+            func.sum(case((GameSession.status == "lost", 1), else_=0)).label("failed_total"),
+            func.sum(case((lost_registered, 1), else_=0)).label("failed_registered"),
+            func.avg(case((GameSession.status == "won", GameSession.solved_on_guess_number))).label("avg_win_guess"),
+        )
+        .join(DailyChallenge, DailyChallenge.article_id == Article.id)
+        .outerjoin(GameSession, GameSession.daily_challenge_id == DailyChallenge.id)
+        .filter(DailyChallenge.challenge_date <= today_utc())
+        .group_by(Article.id, Article.display_title, DailyChallenge.challenge_date)
+        .order_by(DailyChallenge.challenge_date.desc())
+        .all()
+    )
+
+    return jsonify(
+        {
+            "articles": [
+                {
+                    "article_id": r.article_id,
+                    "display_title": r.display_title,
+                    "challenge_date": r.challenge_date.isoformat(),
+                    "attempted": r.attempted,
+                    "won_total": r.won_total,
+                    "won_registered": r.won_registered,
+                    "failed_total": r.failed_total,
+                    "failed_registered": r.failed_registered,
+                    "avg_win_guess": round(float(r.avg_win_guess), 2) if r.avg_win_guess is not None else None,
+                }
+                for r in rows
+            ]
+        }
+    )

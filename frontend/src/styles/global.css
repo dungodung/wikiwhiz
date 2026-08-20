@@ -782,6 +782,12 @@ a.guess-history__text:hover {
   gap: 1rem;
 }
 
+.admin-panel__hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
 .admin-panel__search,
 .admin-panel__filters,
 .admin-panel__new-article {

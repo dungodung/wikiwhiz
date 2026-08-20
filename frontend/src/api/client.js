@@ -37,6 +37,8 @@ export const api = {
     searchArticleTitles: (q) => request(`/admin/article-lookup/search?q=${encodeURIComponent(q)}`),
     resolveArticleLookup: (title) => request(`/admin/article-lookup/resolve?title=${encodeURIComponent(title)}`),
 
+    articleStats: () => request('/admin/article-stats'),
+
     listArticles: (status = '') => request(`/admin/articles${status ? `?status=${status}` : ''}`),
     getArticle: (id) => request(`/admin/articles/${id}`),
     createArticle: (body) => request('/admin/articles', { method: 'POST', body: JSON.stringify(body) }),

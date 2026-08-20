@@ -2,10 +2,12 @@ import { useState } from 'react'
 import AdminUsers from './AdminUsers'
 import AdminArticles from './AdminArticles'
 import AdminSchedule from './AdminSchedule'
+import AdminArticleStats from './AdminArticleStats'
 
 const TABS = {
   articles: { label: 'Articles & clues', Component: AdminArticles },
   schedule: { label: 'Schedule', Component: AdminSchedule },
+  stats: { label: 'Article stats', Component: AdminArticleStats },
   users: { label: 'Users', Component: AdminUsers },
 }
 

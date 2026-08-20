@@ -8,6 +8,7 @@ from backend.app.lib.slot_pattern import tile_shape
 from backend.app.models.article import Article
 from backend.app.models.clue import Clue
 from backend.app.models.daily_challenge import DailyChallenge
+from backend.app.models.session import GameSession
 from backend.app.models.user import User
 
 
@@ -256,3 +257,60 @@ def test_article_lookup_resolve_no_wikidata_item_leaves_summary_null(client, db,
 
     assert resp.status_code == 200
     assert resp.get_json()["summary_extract"] is None
+
+
+# --- article stats ---------------------------------------------------------
+
+def test_article_stats_requires_admin(client, db, plain_user):
+    _login(client, plain_user)
+    resp = client.get("/api/admin/article-stats")
+    assert resp.status_code == 403
+
+
+def test_article_stats_aggregates_sessions_correctly(client, db, admin_user, plain_user):
+    article = _make_ready_article(db, title="Stats Subject", pageid=400)
+    past_date = date.today() - timedelta(days=2)
+    challenge = DailyChallenge(
+        challenge_date=past_date, article_id=article.id, clue_order=[c.id for c in article.clues]
+    )
+    db.session.add(challenge)
+    db.session.flush()
+
+    # A future, never-played challenge -- must not show up in results at all.
+    future_article = _make_ready_article(db, title="Future Subject", pageid=401)
+    db.session.add(
+        DailyChallenge(
+            challenge_date=date.today() + timedelta(days=5),
+            article_id=future_article.id,
+            clue_order=[c.id for c in future_article.clues],
+        )
+    )
+
+    second_registered = User(wikimedia_sub="second-sub", wikimedia_username="SecondUser", is_admin=False)
+    db.session.add(second_registered)
+    db.session.flush()
+
+    sessions = [
+        GameSession(daily_challenge_id=challenge.id, user_id=plain_user.id, status="won", solved_on_guess_number=2),
+        GameSession(daily_challenge_id=challenge.id, user_id=second_registered.id, status="won", solved_on_guess_number=4),
+        GameSession(daily_challenge_id=challenge.id, anon_token="anon-1", status="won", solved_on_guess_number=6),
+        GameSession(daily_challenge_id=challenge.id, anon_token="anon-2", status="lost"),
+        GameSession(daily_challenge_id=challenge.id, user_id=None, anon_token="anon-3", status="in_progress"),
+    ]
+    db.session.add_all(sessions)
+    db.session.commit()
+
+    resp = client.get("/api/admin/article-stats")
+    assert resp.status_code == 200
+    rows = {r["article_id"]: r for r in resp.get_json()["articles"]}
+
+    assert future_article.id not in rows
+    row = rows[article.id]
+    assert row["display_title"] == "Stats Subject"
+    assert row["challenge_date"] == past_date.isoformat()
+    assert row["attempted"] == 5
+    assert row["won_total"] == 3
+    assert row["won_registered"] == 2
+    assert row["failed_total"] == 1
+    assert row["failed_registered"] == 0
+    assert row["avg_win_guess"] == 4.0  # (2 + 4 + 6) / 3
