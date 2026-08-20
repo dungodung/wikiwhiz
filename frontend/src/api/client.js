@@ -34,6 +34,9 @@ export const api = {
     promoteUser: (id) => request(`/admin/users/${id}/promote`, { method: 'POST' }),
     demoteUser: (id) => request(`/admin/users/${id}/demote`, { method: 'POST' }),
 
+    searchArticleTitles: (q) => request(`/admin/article-lookup/search?q=${encodeURIComponent(q)}`),
+    resolveArticleLookup: (title) => request(`/admin/article-lookup/resolve?title=${encodeURIComponent(title)}`),
+
     listArticles: (status = '') => request(`/admin/articles${status ? `?status=${status}` : ''}`),
     getArticle: (id) => request(`/admin/articles/${id}`),
     createArticle: (body) => request('/admin/articles', { method: 'POST', body: JSON.stringify(body) }),

@@ -12,6 +12,7 @@ import time
 import requests
 
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
+WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 _DEFAULT_TIMEOUT = 10
 _MAX_429_RETRIES = 3
 
@@ -21,9 +22,10 @@ def now() -> float:
 
 
 class MediaWikiClient:
-    def __init__(self, user_agent: str, session: requests.Session | None = None):
+    def __init__(self, user_agent: str, session: requests.Session | None = None, base_url: str = WIKIPEDIA_API):
         self.session = session or requests.Session()
         self.session.headers["User-Agent"] = user_agent
+        self.base_url = base_url
 
     def query(self, params: dict, timeout: float = _DEFAULT_TIMEOUT) -> dict:
         """A sustained precompute run (many hundreds of sequential requests
@@ -34,9 +36,9 @@ class MediaWikiClient:
         delay; gives up after _MAX_429_RETRIES so a persistent block still
         surfaces as an error rather than hanging.
         """
-        params = {**params, "action": "query", "format": "json"}
+        params = {"action": "query", **params, "format": "json"}
         for attempt in range(_MAX_429_RETRIES + 1):
-            resp = self.session.get(WIKIPEDIA_API, params=params, timeout=timeout)
+            resp = self.session.get(self.base_url, params=params, timeout=timeout)
             if resp.status_code == 429 and attempt < _MAX_429_RETRIES:
                 delay = float(resp.headers.get("Retry-After", 5 * (attempt + 1)))
                 time.sleep(delay)
@@ -84,6 +86,46 @@ class MediaWikiClient:
                 continue
             return {"pageid": int(pageid), "title": page["title"]}
         return None
+
+    def prefix_search(self, query: str, limit: int = 8, timeout: float = _DEFAULT_TIMEOUT) -> list[dict]:
+        """Title autocomplete, namespace 0 only -- `list=prefixsearch` is the
+        purpose-built MediaWiki endpoint for type-ahead suggestions (unlike
+        `list=search`/CirrusSearch, which ranks by relevance rather than
+        literal prefix match, and is what hint_search.py uses instead for a
+        different reason -- see that module). Returns [{"title","pageid"}],
+        already in the API's own relevance order.
+        """
+        data = self.query(
+            {"list": "prefixsearch", "pssearch": query, "pslimit": limit, "psnamespace": 0},
+            timeout=timeout,
+        )
+        return [
+            {"title": item["title"], "pageid": item["pageid"]}
+            for item in data.get("query", {}).get("prefixsearch", [])
+        ]
+
+    def get_wikibase_item(self, title: str, timeout: float = _DEFAULT_TIMEOUT) -> str | None:
+        """The Wikidata QID linked from this enwiki article's page, if any."""
+        data = self.query({"titles": title, "prop": "pageprops", "ppprop": "wikibase_item"}, timeout=timeout)
+        pages = data.get("query", {}).get("pages", {})
+        for pageid, page in pages.items():
+            if pageid == "-1" or "missing" in page:
+                continue
+            return page.get("pageprops", {}).get("wikibase_item")
+        return None
+
+    def fetch_wikidata_description(self, qid: str, language: str = "en", timeout: float = _DEFAULT_TIMEOUT) -> str | None:
+        """The short one-line description Wikidata shows under an item's
+        label (e.g. "German-born theoretical physicist") -- call this on a
+        client constructed with base_url=WIKIDATA_API, not the default
+        en.wikipedia one, since this hits a different wiki's action API.
+        """
+        data = self.query(
+            {"action": "wbgetentities", "ids": qid, "props": "descriptions", "languages": language},
+            timeout=timeout,
+        )
+        entity = data.get("entities", {}).get(qid, {})
+        return entity.get("descriptions", {}).get(language, {}).get("value")
 
     def titles_to_pageids(self, titles: list[str], timeout: float = _DEFAULT_TIMEOUT) -> dict[str, int]:
         """Batch title -> pageid, for titles that exist as real pages. No

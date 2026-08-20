@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -183,3 +184,75 @@ def test_unschedule_future_date(client, db, admin_user):
     db.session.refresh(article)
     assert article.status == "ready"
     assert article.daily_challenge is None
+
+
+# --- article lookup (add-article popup autocomplete/auto-fill) -----------
+
+def test_article_lookup_search_requires_admin(client, db, plain_user):
+    _login(client, plain_user)
+    resp = client.get("/api/admin/article-lookup/search?q=Alb")
+    assert resp.status_code == 403
+
+
+def test_article_lookup_search_blank_query_returns_no_results(client, db, admin_user):
+    resp = client.get("/api/admin/article-lookup/search?q=")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"results": []}
+
+
+def test_article_lookup_search_returns_prefix_matches(client, db, admin_user):
+    fake_results = [{"title": "Albert Einstein", "pageid": 736}, {"title": "Albert Camus", "pageid": 1234}]
+    with patch("backend.app.lib.mediawiki_api.MediaWikiClient.prefix_search", return_value=fake_results) as mock_search:
+        resp = client.get("/api/admin/article-lookup/search?q=Alb")
+
+    assert resp.status_code == 200
+    assert resp.get_json() == {"results": fake_results}
+    mock_search.assert_called_once_with("Alb", limit=8)
+
+
+def test_article_lookup_resolve_requires_title(client, db, admin_user):
+    resp = client.get("/api/admin/article-lookup/resolve")
+    assert resp.status_code == 400
+
+
+def test_article_lookup_resolve_not_found(client, db, admin_user):
+    with patch("backend.app.lib.mediawiki_api.MediaWikiClient.resolve_title", return_value=None):
+        resp = client.get("/api/admin/article-lookup/resolve?title=Not+A+Real+Page")
+    assert resp.status_code == 404
+
+
+def test_article_lookup_resolve_fills_summary_from_wikidata(client, db, admin_user):
+    with (
+        patch(
+            "backend.app.lib.mediawiki_api.MediaWikiClient.resolve_title",
+            return_value={"pageid": 736, "title": "Albert Einstein"},
+        ),
+        patch("backend.app.lib.mediawiki_api.MediaWikiClient.get_wikibase_item", return_value="Q937"),
+        patch(
+            "backend.app.lib.mediawiki_api.MediaWikiClient.fetch_wikidata_description",
+            return_value="German-born theoretical physicist",
+        ),
+    ):
+        resp = client.get("/api/admin/article-lookup/resolve?title=albert einstein")
+
+    assert resp.status_code == 200
+    assert resp.get_json() == {
+        "wiki_title": "Albert Einstein",
+        "wiki_pageid": 736,
+        "display_title": "Albert Einstein",
+        "summary_extract": "German-born theoretical physicist",
+    }
+
+
+def test_article_lookup_resolve_no_wikidata_item_leaves_summary_null(client, db, admin_user):
+    with (
+        patch(
+            "backend.app.lib.mediawiki_api.MediaWikiClient.resolve_title",
+            return_value={"pageid": 42, "title": "Some Obscure Page"},
+        ),
+        patch("backend.app.lib.mediawiki_api.MediaWikiClient.get_wikibase_item", return_value=None),
+    ):
+        resp = client.get("/api/admin/article-lookup/resolve?title=Some Obscure Page")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["summary_extract"] is None

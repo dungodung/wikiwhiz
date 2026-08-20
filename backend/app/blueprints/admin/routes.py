@@ -10,11 +10,12 @@ content are held to identical rules.
 from datetime import date as date_cls
 from datetime import timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from ...extensions import db
 from ...lib.authz import require_admin
 from ...lib.clue_guard import can_promote_to_ready, leaks_title, usable_clue_count
+from ...lib.mediawiki_api import WIKIDATA_API, MediaWikiClient
 from ...lib.scheduling import SchedulingError, schedule_article, unschedule_article
 from ...lib.slot_pattern import tile_shape
 from ...blueprints.game.service import today_utc
@@ -24,6 +25,10 @@ from ...models.daily_challenge import DailyChallenge
 from ...models.user import User
 
 admin_bp = Blueprint("admin", __name__)
+
+
+def _mediawiki_client() -> MediaWikiClient:
+    return MediaWikiClient(current_app.config["WIKIWHIZ_USER_AGENT"])
 
 
 def _parse_date(date_str: str) -> date_cls | None:
@@ -145,6 +150,55 @@ def get_article(article_id: int):
     if not article:
         return jsonify({"error": "not_found"}), 404
     return jsonify(_serialize_article(article, include_clues=True))
+
+
+@admin_bp.get("/article-lookup/search")
+@require_admin
+def article_lookup_search():
+    """Type-ahead suggestions for the "Exact enwiki title" field in the
+    add-article popup -- see prefix_search's docstring for why this isn't
+    the same search hint_search.py uses.
+    """
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"results": []})
+    results = _mediawiki_client().prefix_search(q, limit=8)
+    return jsonify({"results": results})
+
+
+@admin_bp.get("/article-lookup/resolve")
+@require_admin
+def article_lookup_resolve():
+    """Once a title is picked from the autocomplete, fetch what the
+    add-article popup auto-fills: the canonical pageid/title (following
+    redirects, so picking a redirect's title still resolves to its real
+    target rather than storing the redirect as if it were the article) and,
+    if the article has a linked Wikidata item, its short description as a
+    starting point for the summary field.
+    """
+    title = request.args.get("title", "").strip()
+    if not title:
+        return jsonify({"error": "title_required"}), 400
+
+    client = _mediawiki_client()
+    resolved = client.resolve_title(title)
+    if resolved is None:
+        return jsonify({"error": "not_found"}), 404
+
+    summary = None
+    qid = client.get_wikibase_item(resolved["title"])
+    if qid:
+        wikidata_client = MediaWikiClient(current_app.config["WIKIWHIZ_USER_AGENT"], base_url=WIKIDATA_API)
+        summary = wikidata_client.fetch_wikidata_description(qid)
+
+    return jsonify(
+        {
+            "wiki_title": resolved["title"],
+            "wiki_pageid": resolved["pageid"],
+            "display_title": resolved["title"],
+            "summary_extract": summary,
+        }
+    )
 
 
 @admin_bp.post("/articles")

@@ -61,7 +61,7 @@ options in the FA/GA categories.
 | `outgoing_links` | Same 500-cap problem applies to `pllimit=max` for a links-heavy article (e.g. one with large "See also"/list sections) — prefer the Wiki Replica for an exact count here too if this ever becomes its own clue type; not currently in `CLUE_TYPES`. |
 | `long_section_title` | `action=parse&prop=sections` — pick a longer, distinctive, non-generic heading (avoid "History", "References", "See also"). |
 | `creation_year` | `prop=revisions&rvdir=newer&rvlimit=1&rvprop=timestamp` — the article's first-revision year. Low-leakage fallback clue. |
-| `langlinks_count` | `prop=langlinks&lllimit=max`, count the results — "has an article in N other languages." Low-leakage fallback clue. |
+| `langlinks_count` | `prop=langlinks&lllimit=max`, count the results — "has an article in N other languages." Low-leakage fallback clue. Same 500-cap risk as `incoming_links` in principle (rarely actually hit in practice, since Wikipedia has ~300 language editions total) — prefer the Wiki Replica when available: `SELECT COUNT(*) FROM langlinks WHERE ll_from = <PAGEID>`. |
 | `edit_count` | Wiki Replica only — see "`edit_count` / `distinct_editor_count`" section below. Not a fallback; a genuinely interesting first-tier clue. |
 | `distinct_editor_count` | Wiki Replica only — see "`edit_count` / `distinct_editor_count`" section below. Not a fallback; a genuinely interesting first-tier clue. |
 
