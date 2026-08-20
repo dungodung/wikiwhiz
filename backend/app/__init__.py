@@ -43,6 +43,18 @@ def create_app(config_name: str = "production") -> Flask:
     app.register_blueprint(info_bp, url_prefix="/api/info")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
+    @app.route("/api/debug/whoami")
+    def debug_whoami():
+        from flask import jsonify
+
+        return jsonify(
+            {
+                "remote_addr": request.remote_addr,
+                "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+                "x_real_ip": request.headers.get("X-Real-Ip"),
+            }
+        )
+
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
     def serve_frontend(path):
