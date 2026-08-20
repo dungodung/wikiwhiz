@@ -36,7 +36,7 @@ Wikimedia account) — Claude Code cannot do this for you.
 ## How it's used in code
 
 `backend/app/blueprints/auth/oauth_client.py` implements the Authorization
-Code flow against `meta.wikimedia.org/rest.php/oauth2/*`:
+Code flow against `meta.wikimedia.org/w/rest.php/oauth2/*`:
 `/api/auth/login` redirects to Wikimedia's authorize endpoint with a random
 `state`; `/api/auth/callback` validates that `state` (CSRF protection),
 exchanges the code for an access token, fetches the user's profile, and

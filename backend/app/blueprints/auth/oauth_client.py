@@ -8,9 +8,9 @@ from urllib.parse import urlencode
 
 import requests
 
-AUTHORIZE_URL = "https://meta.wikimedia.org/rest.php/oauth2/authorize"
-TOKEN_URL = "https://meta.wikimedia.org/rest.php/oauth2/access_token"
-PROFILE_URL = "https://meta.wikimedia.org/rest.php/oauth2/resource/profile"
+AUTHORIZE_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/authorize"
+TOKEN_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/access_token"
+PROFILE_URL = "https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile"
 
 
 def new_state() -> str:
