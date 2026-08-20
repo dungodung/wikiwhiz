@@ -57,7 +57,7 @@ def _parse_date(date_str: str) -> date_cls | None:
 def _get_day_state(target_date: date_cls):
     daily_challenge = service.get_challenge_for_date(target_date)
     if daily_challenge is None:
-        return jsonify({"error": "no_challenge_scheduled"}), 404
+        return jsonify({"error": "No puzzle is scheduled for this date yet — check back soon!"}), 404
 
     user_id, anon_token, new_cookie_value = _get_identity()
     session_row = service.get_session(daily_challenge, user_id, anon_token)
@@ -72,7 +72,7 @@ def _get_day_state(target_date: date_cls):
 def _post_day_guess(target_date: date_cls):
     daily_challenge = service.get_challenge_for_date(target_date)
     if daily_challenge is None:
-        return jsonify({"error": "no_challenge_scheduled"}), 404
+        return jsonify({"error": "No puzzle is scheduled for this date yet — check back soon!"}), 404
 
     user_id, anon_token, new_cookie_value = _get_identity()
     session_row = service.get_or_create_session(daily_challenge, user_id, anon_token)
@@ -143,7 +143,7 @@ def hint(date_str: str):
 
     daily_challenge = service.get_challenge_for_date(target_date)
     if daily_challenge is None:
-        return jsonify({"error": "no_challenge_scheduled"}), 404
+        return jsonify({"error": "No puzzle is scheduled for this date yet — check back soon!"}), 404
 
     pattern = request.args.get("pattern", "")
     article = daily_challenge.article
