@@ -4,8 +4,12 @@ Kept independent of Flask request/response objects (routes.py handles cookies
 and JSON) so it's unit-testable directly.
 """
 
+import logging
+import threading
 from datetime import date as date_cls
 from datetime import datetime, timezone
+
+from flask import current_app
 
 from ...extensions import db
 from ...models.article import Article
@@ -14,9 +18,12 @@ from ...models.daily_challenge import DailyChallenge
 from ...models.session import GameSession, GuessAttempt
 from ...models.stats import UserStats
 from ...lib import degrees as degrees_lib
+from ...lib import hint_search
 from ...lib.mediawiki_api import MediaWikiClient
-from ...lib.resolve import resolve_guess_text
 from ...lib.similarity import bucket_lexical, score_lexical
+from ...lib.slot_pattern import KEPT_PUNCTUATION, normalize_to_tiles
+
+logger = logging.getLogger(__name__)
 
 
 class GameError(Exception):
@@ -71,15 +78,22 @@ def list_archive(user_id: int | None, anon_token: str | None) -> list[dict]:
     ]
 
 
+def get_session(daily_challenge: DailyChallenge, user_id: int | None, anon_token: str | None) -> GameSession | None:
+    """Read-only lookup -- never creates a row. Just viewing a puzzle
+    shouldn't write to the database; a GameSession is only ever created when
+    the player actually submits a guess (see get_or_create_session), so
+    idle visits (no play at all) leave no trace.
+    """
+    query = GameSession.query.filter_by(daily_challenge_id=daily_challenge.id)
+    if user_id:
+        return query.filter_by(user_id=user_id).first()
+    return query.filter_by(anon_token=anon_token).first()
+
+
 def get_or_create_session(
     daily_challenge: DailyChallenge, user_id: int | None, anon_token: str | None
 ) -> GameSession:
-    query = GameSession.query.filter_by(daily_challenge_id=daily_challenge.id)
-    if user_id:
-        existing = query.filter_by(user_id=user_id).first()
-    else:
-        existing = query.filter_by(anon_token=anon_token).first()
-
+    existing = get_session(daily_challenge, user_id, anon_token)
     if existing:
         return existing
 
@@ -101,20 +115,34 @@ def _clue_ids_revealed(daily_challenge: DailyChallenge, clues_revealed: int) -> 
     return daily_challenge.clue_order[:clues_revealed]
 
 
-def serialize_state(session_row: GameSession, daily_challenge: DailyChallenge, article: Article) -> dict:
-    revealed_ids = _clue_ids_revealed(daily_challenge, session_row.clues_revealed)
-    clues = Clue.query.filter(Clue.id.in_(revealed_ids)).all() if revealed_ids else []
+def serialize_state(session_row: GameSession | None, daily_challenge: DailyChallenge, article: Article) -> dict:
+    """session_row is None for a puzzle the player hasn't made a guess on
+    yet (see get_session) -- that's rendered as the same fresh starting
+    state get_or_create_session would produce (first clue only, no
+    guesses), just without a database row backing it.
+    """
+    clues_revealed = session_row.clues_revealed if session_row else 1
+    status = session_row.status if session_row else "in_progress"
+    guess_attempts = session_row.guess_attempts if session_row else []
+
+    revealed_ids = _clue_ids_revealed(daily_challenge, clues_revealed)
+    all_clue_ids = revealed_ids if status != "won" else daily_challenge.clue_order
+    clues = Clue.query.filter(Clue.id.in_(all_clue_ids)).all() if all_clue_ids else []
     clues_by_id = {c.id: c for c in clues}
-    ordered_clues = [
-        {
-            "clue_id": cid,
-            "clue_type": clues_by_id[cid].clue_type,
-            "clue_text": clues_by_id[cid].clue_text,
-            "clue_media_url": clues_by_id[cid].clue_media_url,
-        }
-        for cid in revealed_ids
-        if cid in clues_by_id
-    ]
+
+    def _clue_dicts(clue_ids: list[int]) -> list[dict]:
+        return [
+            {
+                "clue_id": cid,
+                "clue_type": clues_by_id[cid].clue_type,
+                "clue_text": clues_by_id[cid].clue_text,
+                "clue_media_url": clues_by_id[cid].clue_media_url,
+            }
+            for cid in clue_ids
+            if cid in clues_by_id
+        ]
+
+    ordered_clues = _clue_dicts(revealed_ids)
 
     guesses = [
         {
@@ -124,9 +152,10 @@ def serialize_state(session_row: GameSession, daily_challenge: DailyChallenge, a
             "lexical_score_bucket": g.lexical_score_bucket,
             "degrees_value": g.degrees_value,
             "degrees_capped": g.degrees_capped,
+            "degrees_pending": g.degrees_pending,
             "is_correct": g.is_correct,
         }
-        for g in session_row.guess_attempts
+        for g in guess_attempts
     ]
 
     state = {
@@ -135,12 +164,19 @@ def serialize_state(session_row: GameSession, daily_challenge: DailyChallenge, a
         "slot_pattern": article.slot_pattern,
         "clues_revealed": ordered_clues,
         "total_clues_available": len(daily_challenge.clue_order),
-        "status": session_row.status,
+        "status": status,
         "guesses": guesses,
     }
-    if session_row.status in ("won", "lost"):
+    if status in ("won", "lost"):
         state["solved_answer_title"] = article.display_title
+        state["solved_answer_tiles"] = normalize_to_tiles(article.display_title)
         state["summary_extract"] = article.summary_extract
+    if status == "won":
+        # Only once the puzzle is solved -- an in-progress or lost game
+        # never gets clues it hasn't earned, since that's the whole point
+        # of the reveal-on-wrong-guess mechanic. Shown dimmed client-side so
+        # it's clear these were never used as guessing help.
+        state["remaining_clues"] = _clue_dicts(daily_challenge.clue_order[clues_revealed:])
     return state
 
 
@@ -181,6 +217,136 @@ def _update_user_stats(user_id: int, won: bool, attempt_number: int | None) -> N
     stats.last_played_date = today
 
 
+def check_guess_shape(article: Article, guess_tiles: str) -> None:
+    """A guess is entered by filling the article's tile board directly, so it
+    must already be the right length. Nothing is pre-revealed -- spaces,
+    dashes, commas, and parentheses are guessable tiles just like letters,
+    not fixed positions -- so the only server-side check left is length and
+    that every character is one the game could ever actually use.
+    """
+    if len(guess_tiles) != len(article.slot_pattern):
+        raise GameError("Guess must fill every tile.", status_code=400)
+    for ch in guess_tiles:
+        if not (ch.isalpha() or ch in KEPT_PUNCTUATION):
+            raise GameError("Tiles must be filled with letters or valid punctuation.", status_code=400)
+
+
+class _WrongGuessResolution:
+    """Everything process_guess needs to know about a wrong guess *before*
+    the (possibly slow) live BFS is attempted -- degrees are resolved
+    separately, in the background, if `needs_live_bfs` is set. See
+    _spawn_live_degrees_computation.
+    """
+
+    def __init__(
+        self,
+        pageid: int | None,
+        title: str | None,
+        degrees_value: int | None,
+        degrees_capped: bool,
+        needs_live_bfs: bool,
+    ):
+        self.pageid = pageid
+        self.title = title
+        self.degrees_value = degrees_value
+        self.degrees_capped = degrees_capped
+        self.needs_live_bfs = needs_live_bfs
+
+
+def _resolve_wrong_guess(article: Article, guess_tiles: str, client: MediaWikiClient) -> _WrongGuessResolution:
+    """A wrong guess only counts as an attempt if it spells a real enwiki
+    article -- checked cheaply first against the precomputed same-shape
+    neighbor cache (lib/degrees.py), then, on a cache miss, against a live
+    best-effort search (lib/hint_search.py::verify_real_article). Raises on a
+    confirmed non-article; on a live search failure it degrades gracefully
+    (accepts the guess, just without a resolved title or degrees value)
+    rather than blocking play over a transient network issue.
+
+    A guess confirmed real but still missing from the cache (common -- the
+    precompute only covers a bounded neighborhood around the answer) still
+    doesn't get a live BFS *here* -- that can take anywhere from a couple of
+    seconds to 20+ for two hub-like articles, and the guess itself (right or
+    wrong, and whatever real article it resolves to) shouldn't wait on it.
+    `needs_live_bfs=True` tells the caller to accept the guess now and kick
+    the actual BFS off in the background (see _spawn_live_degrees_computation).
+    """
+    resolved = degrees_lib.resolve_and_score_guess(article.id, guess_tiles)
+    if resolved is not None:
+        return _WrongGuessResolution(
+            pageid=resolved.pageid,
+            title=resolved.title,
+            degrees_value=resolved.degrees_result.degrees,
+            degrees_capped=resolved.degrees_result.capped,
+            needs_live_bfs=False,
+        )
+
+    verified = hint_search.verify_real_article(client, guess_tiles)
+    if verified.unavailable:
+        return _WrongGuessResolution(None, None, None, True, needs_live_bfs=False)
+    if not verified.found:
+        raise GameError("That's not a real English Wikipedia article title.", status_code=422)
+
+    return _WrongGuessResolution(
+        pageid=verified.pageid,
+        title=verified.title,
+        degrees_value=None,
+        degrees_capped=False,
+        needs_live_bfs=True,
+    )
+
+
+def _spawn_live_degrees_computation(
+    article_id: int, attempt_id: int, guess_pageid: int, client: MediaWikiClient, degrees_config: dict
+) -> None:
+    """Runs the bounded live BFS in a background thread and writes the
+    result back onto the already-committed GuessAttempt row once it's done,
+    flipping degrees_pending off. A fresh app context (and therefore a fresh
+    scoped session) is required since Flask-SQLAlchemy's session is tied to
+    the request's context, which will be gone by the time this runs.
+    """
+    app = current_app._get_current_object()
+
+    def worker() -> None:
+        with app.app_context():
+            try:
+                article = db.session.get(Article, article_id)
+                result = degrees_lib.compute_degrees_live(
+                    client,
+                    article,
+                    guess_pageid,
+                    depth_cap=degrees_config["depth_cap"],
+                    node_cap=degrees_config["node_cap"],
+                    timeout_sec=degrees_config["timeout_sec"],
+                )
+                degrees_value, degrees_capped = result.degrees, result.capped
+            except Exception:
+                logger.exception("Background live-degrees computation failed for attempt_id=%s", attempt_id)
+                degrees_value, degrees_capped = None, True
+                # A failure here (e.g. a lock-wait timeout from
+                # opportunistic caching racing another writer) leaves this
+                # session's transaction in a rolled-back state -- reusing it
+                # without rolling back first raises PendingRollbackError,
+                # which would silently kill this thread *before* the
+                # attempt row below ever gets updated, stranding
+                # degrees_pending=True forever. Confirmed live: exactly this
+                # happened when a precompute run collided with a live guess
+                # on the same article.
+                db.session.rollback()
+
+            try:
+                attempt = db.session.get(GuessAttempt, attempt_id)
+                if attempt is not None:
+                    attempt.degrees_value = degrees_value
+                    attempt.degrees_capped = degrees_capped
+                    attempt.degrees_pending = False
+                    db.session.commit()
+            except Exception:
+                logger.exception("Failed to persist degrees result for attempt_id=%s", attempt_id)
+                db.session.rollback()
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def process_guess(
     session_row: GameSession,
     daily_challenge: DailyChallenge,
@@ -192,41 +358,43 @@ def process_guess(
     if session_row.status != "in_progress":
         raise GameError("This puzzle is already finished.", status_code=409)
 
-    guess_text = (guess_text or "").strip()
-    if not guess_text:
+    guess_tiles = (guess_text or "").strip()
+    if not guess_tiles:
         raise GameError("Guess text is required.")
+    check_guess_shape(article, guess_tiles)
 
-    resolved = resolve_guess_text(client, guess_text)
-    raw_score = score_lexical(guess_text, article.display_title)
+    if any(g.raw_guess_text.lower() == guess_tiles.lower() for g in session_row.guess_attempts):
+        raise GameError("You already tried that guess.", status_code=409)
+
+    answer_tiles = normalize_to_tiles(article.display_title)
+    is_correct = guess_tiles.lower() == answer_tiles.lower()
+
+    resolved = None if is_correct else _resolve_wrong_guess(article, guess_tiles, client)
+    raw_score = score_lexical(guess_tiles, answer_tiles)
     bucket = bucket_lexical(raw_score)
 
-    is_correct = bool(resolved) and resolved["pageid"] == article.wiki_pageid
-
-    degrees_value = None
-    degrees_capped = False
-    if resolved:
-        result = degrees_lib.compute_degrees(
-            client,
-            article,
-            resolved["pageid"],
-            depth_cap=degrees_config["depth_cap"],
-            node_cap=degrees_config["node_cap"],
-            timeout_sec=degrees_config["timeout_sec"],
-        )
-        degrees_value = result.degrees
-        degrees_capped = result.capped
+    if is_correct:
+        degrees_value, degrees_capped, degrees_pending = 0, False, False
+        resolved_title, resolved_pageid = article.display_title, article.wiki_pageid
+    elif resolved.needs_live_bfs:
+        degrees_value, degrees_capped, degrees_pending = None, False, True
+        resolved_title, resolved_pageid = resolved.title, resolved.pageid
+    else:
+        degrees_value, degrees_capped, degrees_pending = resolved.degrees_value, resolved.degrees_capped, False
+        resolved_title, resolved_pageid = resolved.title, resolved.pageid
 
     attempt_number = session_row.guesses_made + 1
     attempt = GuessAttempt(
         game_session_id=session_row.id,
         attempt_number=attempt_number,
-        raw_guess_text=guess_text,
-        resolved_title=resolved["title"] if resolved else None,
-        resolved_pageid=resolved["pageid"] if resolved else None,
+        raw_guess_text=guess_tiles,
+        resolved_title=resolved_title,
+        resolved_pageid=resolved_pageid,
         lexical_score_bucket=bucket,
         lexical_score_raw=raw_score,
         degrees_value=degrees_value,
         degrees_capped=degrees_capped,
+        degrees_pending=degrees_pending,
         is_correct=is_correct,
     )
     db.session.add(attempt)
@@ -256,4 +424,8 @@ def process_guess(
         )
 
     db.session.commit()
+
+    if degrees_pending:
+        _spawn_live_degrees_computation(article.id, attempt.id, resolved_pageid, client, degrees_config)
+
     return attempt

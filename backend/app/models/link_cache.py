@@ -4,6 +4,20 @@ from ..extensions import db
 
 
 class LinkCacheNode(db.Model):
+    """A same-shape neighbor of an answer article, discovered by BFS over the
+    real link graph (see scripts/precompute_link_cache.py). Only nodes whose
+    title normalizes (lib.slot_pattern.normalize_to_tiles) to the same total
+    tile count as the answer are ever written here -- anything else could
+    never be typed into the answer's fixed-length tile board, so it's not a
+    useful degrees-of-Wikipedia candidate.
+
+    node_tiles (lowercased normalize_to_tiles(node_title)) doubles as the
+    guess-resolution key: backend/app/lib/degrees.py looks a submitted guess
+    up directly by (answer_article_id, node_tiles) to find both the real
+    article it spells out and its precomputed hop-distance, with no live API
+    call needed at guess time.
+    """
+
     __tablename__ = "link_cache_nodes"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -12,6 +26,7 @@ class LinkCacheNode(db.Model):
     )
     node_pageid = db.Column(db.Integer, nullable=False)
     node_title = db.Column(db.String(255), nullable=False)
+    node_tiles = db.Column(db.String(255), nullable=False)
     degree = db.Column(db.SmallInteger, nullable=False)
     discovered_via = db.Column(
         db.Enum("precompute", "live_bfs", name="link_cache_discovered_via"),
@@ -24,6 +39,7 @@ class LinkCacheNode(db.Model):
         db.UniqueConstraint("answer_article_id", "node_pageid", name="uq_link_cache_answer_node"),
         db.Index("ix_link_cache_answer_degree", "answer_article_id", "degree"),
         db.Index("ix_link_cache_node_title", "node_title"),
+        db.Index("ix_link_cache_answer_tiles", "answer_article_id", "node_tiles"),
     )
 
 

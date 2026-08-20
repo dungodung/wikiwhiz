@@ -27,8 +27,16 @@ class BaseConfig:
         "WIKIWHIZ_USER_AGENT", "WikiWhiz/0.1 (dev) requests"
     )
 
-    DEGREES_LIVE_BFS_TIMEOUT_SEC = float(os.environ.get("DEGREES_LIVE_BFS_TIMEOUT_SEC", "4"))
-    DEGREES_LIVE_BFS_NODE_CAP = int(os.environ.get("DEGREES_LIVE_BFS_NODE_CAP", "2000"))
+    # A 4s budget (the original default) sounds generous but isn't, in
+    # practice: a hub-like answer article (e.g. Albert Einstein) has
+    # hundreds of links in each direction, and just fetching + resolving
+    # that one neighborhood's titles to pageids is several paginated API
+    # calls on its own -- confirmed live, a real 2-hop connection
+    # (Einstein <-> George H. W. Bush) still hadn't completed at 4s. This is
+    # a background fallback for one wrong guess, not a page-load path, so a
+    # generous budget is the right trade here.
+    DEGREES_LIVE_BFS_TIMEOUT_SEC = float(os.environ.get("DEGREES_LIVE_BFS_TIMEOUT_SEC", "20"))
+    DEGREES_LIVE_BFS_NODE_CAP = int(os.environ.get("DEGREES_LIVE_BFS_NODE_CAP", "4000"))
     DEGREES_LIVE_BFS_DEPTH_CAP = int(os.environ.get("DEGREES_LIVE_BFS_DEPTH_CAP", "6"))
 
     LOW_POOL_THRESHOLD = int(os.environ.get("LOW_POOL_THRESHOLD", "3"))

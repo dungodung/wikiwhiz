@@ -101,12 +101,13 @@ def main() -> int:
         ).all()
         for stmt in _insert_statements(
             "link_cache_nodes",
-            ["id", "answer_article_id", "node_pageid", "node_title", "degree",
+            ["id", "answer_article_id", "node_pageid", "node_title", "node_tiles", "degree",
              "discovered_via", "computed_at"],
             [
                 {
                     "id": n.id, "answer_article_id": n.answer_article_id,
                     "node_pageid": n.node_pageid, "node_title": n.node_title,
+                    "node_tiles": n.node_tiles,
                     "degree": n.degree, "discovered_via": n.discovered_via,
                     "computed_at": n.computed_at,
                 }

@@ -1,11 +1,14 @@
 import ClueCard from './ClueCard'
 
-export default function ClueFeed({ clues }) {
+export default function ClueFeed({ clues, indexOffset = 0, dimmed = false, heading = null }) {
   return (
-    <ul className="clue-feed">
-      {clues.map((clue, i) => (
-        <ClueCard key={clue.clue_id} clue={clue} index={i} />
-      ))}
-    </ul>
+    <>
+      {heading && <h3 className="clue-feed__heading">{heading}</h3>}
+      <ul className={`clue-feed${dimmed ? ' clue-feed--dimmed' : ''}`}>
+        {clues.map((clue, i) => (
+          <ClueCard key={clue.clue_id} clue={clue} index={indexOffset + i} animate={!dimmed} />
+        ))}
+      </ul>
+    </>
   )
 }

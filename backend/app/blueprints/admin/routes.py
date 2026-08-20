@@ -16,7 +16,7 @@ from ...extensions import db
 from ...lib.authz import require_admin
 from ...lib.clue_guard import can_promote_to_ready, leaks_title, usable_clue_count
 from ...lib.scheduling import SchedulingError, schedule_article, unschedule_article
-from ...lib.slot_pattern import tokenize_title_to_slots
+from ...lib.slot_pattern import tile_shape
 from ...blueprints.game.service import today_utc
 from ...models.article import Article
 from ...models.clue import CLUE_TYPES, Clue
@@ -162,7 +162,7 @@ def create_article():
         wiki_title=title,
         wiki_pageid=pageid,
         display_title=display_title,
-        slot_pattern=tokenize_title_to_slots(display_title),
+        slot_pattern=tile_shape(display_title),
         summary_extract=payload.get("summary_extract"),
         source_notes=payload.get("source_notes"),
         status="draft",

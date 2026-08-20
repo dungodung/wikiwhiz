@@ -2,6 +2,16 @@
 
 ## Selecting a candidate article
 
+The board shows a flat row of tiles: letters are guessable, and space, dash,
+comma, and parentheses each show up as their own fixed, revealed tile (see
+`backend/app/lib/slot_pattern.py`) -- word boundaries and a parenthetical
+disambiguator like "Mercury (element)" are both fine and visible on the
+board. Everything else (quotation marks, periods, colons, apostrophes,
+digits) is stripped, which can normalize awkwardly for titles that lean on
+it heavily (e.g. a title that's mostly digits, or an apostrophe-heavy name)
+-- prefer titles where the letters/kept-punctuation still read naturally
+once other punctuation is gone.
+
 Prefer articles that are rich enough to support 5-7 distinct, non-trivial
 clues without repeating information. In rough priority order:
 

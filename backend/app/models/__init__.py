@@ -5,7 +5,6 @@ from .link_cache import LinkCacheMeta, LinkCacheNode
 from .pool_alert import PoolAlertState
 from .session import GameSession, GuessAttempt
 from .stats import UserStats
-from .title_resolution import TitleResolution
 from .user import User
 
 __all__ = [
@@ -18,6 +17,5 @@ __all__ = [
     "GameSession",
     "GuessAttempt",
     "UserStats",
-    "TitleResolution",
     "User",
 ]

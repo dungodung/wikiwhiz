@@ -60,7 +60,7 @@ def _get_day_state(target_date: date_cls):
         return jsonify({"error": "no_challenge_scheduled"}), 404
 
     user_id, anon_token, new_cookie_value = _get_identity()
-    session_row = service.get_or_create_session(daily_challenge, user_id, anon_token)
+    session_row = service.get_session(daily_challenge, user_id, anon_token)
     state = service.serialize_state(session_row, daily_challenge, daily_challenge.article)
 
     response = jsonify(state)
@@ -147,15 +147,17 @@ def hint(date_str: str):
 
     pattern = request.args.get("pattern", "")
     article = daily_challenge.article
-    total_letters = sum(tok["len"] for tok in article.slot_pattern if tok["type"] == "word")
-
-    if len(pattern) != total_letters:
-        return jsonify({"error": "pattern_length_mismatch", "expected_length": total_letters}), 400
 
     try:
-        hint_search.build_regex(article.slot_pattern, pattern)  # validates pattern chars up front
+        hint_search.build_regex(article.slot_pattern, pattern)  # validates pattern shape up front
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
     result = hint_search.search_titles_by_regex(_mediawiki_client(), article.slot_pattern, pattern)
-    return jsonify({"matches": result.titles, "truncated": result.truncated, "unavailable": result.unavailable})
+    return jsonify(
+        {
+            "matches": [{"title": m.title, "tiles": m.tiles} for m in result.matches],
+            "truncated": result.truncated,
+            "unavailable": result.unavailable,
+        }
+    )

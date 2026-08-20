@@ -16,7 +16,7 @@ import sys
 from _db import session_scope
 
 from backend.app.lib.clue_guard import can_promote_to_ready
-from backend.app.lib.slot_pattern import tokenize_title_to_slots
+from backend.app.lib.slot_pattern import tile_shape
 from backend.app.models.article import Article
 
 
@@ -63,7 +63,7 @@ def main() -> int:
             wiki_title=args.title,
             wiki_pageid=args.pageid,
             display_title=args.display_title,
-            slot_pattern=tokenize_title_to_slots(args.display_title),
+            slot_pattern=tile_shape(args.display_title),
             summary_extract=args.summary,
             source_notes=args.notes,
             status="draft",

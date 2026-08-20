@@ -15,9 +15,9 @@ const CLUE_TYPE_LABELS = {
   langlinks_count: 'Language coverage',
 }
 
-export default function ClueCard({ clue, index }) {
+export default function ClueCard({ clue, index, animate = false }) {
   return (
-    <li className="clue-card">
+    <li className={`clue-card${animate ? ' clue-card--reveal' : ''}`}>
       <div className="clue-card__header">
         <span className="clue-card__index">Clue {index + 1}</span>
         <span className="clue-card__type">{CLUE_TYPE_LABELS[clue.clue_type] || clue.clue_type}</span>

@@ -6,11 +6,10 @@ upgrade` (see README.md). All tables are InnoDB/utf8mb4.
 
 | Table | Purpose |
 |---|---|
-| `articles` | The answer pool. `status`: draft → ready → scheduled (→ retired). `slot_pattern` (JSON) is the Wheel-of-Fortune rendering data, computed once at insert time. |
+| `articles` | The answer pool. `status`: draft → ready → scheduled (→ retired). `slot_pattern` (JSON, a plain string) is the flat tile shape -- `'L'` per guessable letter; space/dash/comma/parentheses are each their own fixed, revealed tile; all other punctuation and diacritics are stripped -- computed once at insert time by `lib/slot_pattern.py::tile_shape()`. |
 | `clues` | 1 article : many clues. `clue_type` is one of the 14 types in `models/clue.py::CLUE_TYPES`. `is_title_leaking` is a guard flag (should always end up `False` for anything actually used — `db_add_clue.py` refuses to insert a leaking clue). |
 | `daily_challenges` | One row per UTC calendar day. `clue_order` (JSON) is the frozen, pre-randomized list of clue ids for that day — request handlers never re-randomize. |
-| `link_cache_nodes` / `link_cache_meta` | The degrees-of-Wikipedia precomputed neighborhood cache per answer article, plus live-BFS-discovered nodes written back opportunistically. |
-| `title_resolutions` | Global cache: normalized free-text guess → resolved Wikipedia article. Independent of which answer article is being played. |
+| `link_cache_nodes` / `link_cache_meta` | The degrees-of-Wikipedia precomputed neighborhood cache per answer article -- only same-total-tile-count neighbors are kept (`scripts/precompute_link_cache.py`). `node_tiles` (each node's own normalized tile string) is how `lib/degrees.py` resolves a submitted guess and its hop-distance in one indexed lookup, with no live API call at guess time. |
 | `users` | Wikimedia identity only (`wikimedia_sub`, `wikimedia_username`, `is_admin`). No OAuth tokens stored. First admin is bootstrapped via `scripts/promote_admin.py`. |
 | `game_sessions` | One per (identity, daily_challenge) pair — identity is either `user_id` or an anonymous cookie token. |
 | `guess_attempts` | Every guess ever made, with its scored lexical bucket and degrees result. |

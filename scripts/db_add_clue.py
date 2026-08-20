@@ -19,6 +19,7 @@ import sys
 from _db import session_scope
 
 from backend.app.lib.clue_guard import leaks_title
+from backend.app.models.article import Article
 from backend.app.models.clue import CLUE_TYPES, Clue
 
 

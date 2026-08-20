@@ -129,48 +129,42 @@ body {
   color: var(--color-danger);
 }
 
-.word-slots {
+.tile-board {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 4px;
   justify-content: center;
   padding: 1rem 0;
 }
 
-.word-slots__word {
-  display: flex;
-  gap: 4px;
-}
-
-.word-slots__letter {
-  width: 2rem;
-  height: 2.4rem;
+.tile-board__tile {
+  width: 2.4rem;
+  height: 2.9rem;
+  border: none;
   border-bottom: 3px solid var(--color-accent);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   font-family: var(--font-serif);
-  font-size: 1.3rem;
+  font-size: 1.55rem;
   font-weight: 700;
   text-transform: uppercase;
+  color: var(--color-text);
+  padding: 0;
+  caret-color: transparent;
+  cursor: pointer;
 }
 
-.word-slots__punct {
-  align-self: flex-end;
-  font-size: 1.3rem;
-  padding-bottom: 0.3rem;
-  color: var(--color-text-muted);
+.tile-board__tile:focus {
+  outline: none;
+  background: var(--color-surface-raised);
+  border-bottom-color: var(--color-accent);
 }
 
-.word-slots__gap {
-  width: 1rem;
-}
-
-.game-board__closeness {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  flex-wrap: wrap;
+.tile-board__tile--filled {
+  border-bottom-color: var(--color-success);
 }
 
 .closeness-bar {
@@ -214,6 +208,11 @@ body {
   color: var(--color-accent);
 }
 
+.degrees-badge__value--pending {
+  display: inline-block;
+  animation: spin 1.4s linear infinite;
+}
+
 .degrees-badge__caption {
   font-size: 0.7rem;
   color: var(--color-text-muted);
@@ -224,6 +223,10 @@ body {
   border-radius: var(--radius);
   padding: 1rem;
   text-align: center;
+}
+
+.game-board__result a {
+  color: var(--color-accent);
 }
 
 .game-board__result--won {
@@ -241,79 +244,194 @@ body {
   font-size: 0.9rem;
 }
 
-/* Guess input */
-.guess-input__form {
+.game-board__result--enter {
+  animation: resultPop 0.5s ease-out;
+}
+
+@keyframes resultPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Guess panel (tile fill + submit + hint toggle) */
+.guess-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.guess-panel__actions {
   display: flex;
   gap: 0.5rem;
+  justify-content: center;
 }
 
-.guess-input__field {
-  flex: 1;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  color: var(--color-text);
-  padding: 0.6rem 0.8rem;
-  font-size: 1rem;
-}
-
-.guess-input__submit {
+.guess-panel__submit {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border: none;
   border-radius: var(--radius);
-  padding: 0 1.2rem;
+  padding: 0.5rem 1.2rem;
   font-weight: 700;
   cursor: pointer;
 }
 
-.guess-input__submit:disabled {
+.guess-panel__submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* On-screen keyboard */
-.on-screen-keyboard {
-  margin-top: 0.75rem;
-}
-
-.on-screen-keyboard__toggle {
+.guess-panel__clear {
   background: none;
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   border-radius: var(--radius);
-  padding: 0.35rem 0.7rem;
+  padding: 0.5rem 1rem;
   cursor: pointer;
-  font-size: 0.85rem;
 }
 
-.on-screen-keyboard__keys {
-  margin-top: 0.6rem;
+.guess-panel__count {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Guess history -- floats in the side margin on wide viewports (see the
+   max-width: 1100px media query below for the narrow-screen fallback,
+   where there's no margin to float into). */
+.guess-history {
+  position: fixed;
+  top: 7rem;
+  right: max(1rem, calc((100vw - 720px) / 2 - 320px));
+  width: 300px;
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.guess-history__heading {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.guess-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.75rem;
+}
+
+.guess-history__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.05rem;
+}
+
+.guess-history__number {
+  flex-shrink: 0;
+  width: 1.4rem;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.guess-history__swatch {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-family: var(--font-serif);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  cursor: default;
+}
+
+.guess-history__swatch--pending > * {
+  display: inline-block;
+  animation: spin 1.4s linear infinite;
+}
+
+/* Positioned with `position: fixed` and JS-computed top/left (see
+   GuessHistory.jsx) rather than `position: absolute` relative to the
+   swatch -- .guess-history scrolls once there are enough guesses, and an
+   absolutely-positioned descendant gets clipped to that scrolling
+   container's bounds regardless of its coordinates. `fixed` isn't subject
+   to an ancestor's overflow, so it can render outside the box. */
+.guess-history__tooltip {
+  position: fixed;
+  width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-}
-
-.on-screen-keyboard__row {
-  display: flex;
-  gap: 0.3rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.on-screen-keyboard__key {
+  align-items: center;
+  gap: 0.6rem;
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
-  color: var(--color-text);
-  border-radius: 4px;
-  min-width: 2rem;
-  padding: 0.5rem 0.3rem;
-  cursor: pointer;
-  font-size: 0.85rem;
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 20;
 }
 
-.on-screen-keyboard__key--wide {
-  min-width: 3.5rem;
+.guess-history__tooltip--left {
+  transform: translate(-100%, -50%);
+}
+
+.guess-history__tooltip--below {
+  width: 220px;
+  transform: translate(-50%, 0);
+}
+
+.guess-history__tooltip .closeness-bar {
+  width: 100%;
+  min-width: 0;
+}
+
+.guess-history__text {
+  overflow-wrap: anywhere;
+}
+
+a.guess-history__text {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+a.guess-history__text:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
 /* Clue feed */
@@ -351,6 +469,33 @@ body {
 
 .clue-card__text {
   margin: 0;
+}
+
+.clue-card--reveal {
+  animation: clueReveal 0.4s ease-out;
+}
+
+@keyframes clueReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.clue-feed__heading {
+  margin: 1.5rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.clue-feed--dimmed {
+  opacity: 0.5;
 }
 
 /* Stats */
@@ -481,27 +626,6 @@ body {
   margin: 0;
   font-size: 0.85rem;
   color: var(--color-text-muted);
-}
-
-.hint-panel__slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: center;
-}
-
-.hint-panel__letter {
-  width: 1.8rem;
-  height: 2.2rem;
-  text-align: center;
-  text-transform: uppercase;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  color: var(--color-text);
-  font-size: 1.1rem;
-  font-family: var(--font-serif);
-  padding: 0;
 }
 
 .hint-panel__status {
@@ -760,11 +884,23 @@ body {
   align-items: center;
 }
 
+@media (max-width: 1100px) {
+  /* No side margin to float into below this width -- fold the guess
+     history back into the normal document flow instead of overlapping
+     the main column. */
+  .guess-history {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin-top: 0.75rem;
+  }
+}
+
 @media (max-width: 480px) {
-  .word-slots__letter {
-    width: 1.6rem;
-    height: 2rem;
-    font-size: 1.05rem;
+  .tile-board__tile {
+    width: 1.9rem;
+    height: 2.3rem;
+    font-size: 1.2rem;
   }
 
   .stats-page__summary {

@@ -7,7 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        // In docker-compose, this dev server runs inside its own container,
+        // so `localhost` refers to that container -- reach the backend
+        // service by its compose service name instead. Overridable for
+        // running the frontend outside docker (e.g. `npm run dev` directly).
+        target: process.env.VITE_API_PROXY_TARGET || 'http://backend:5000',
         changeOrigin: true,
       },
     },

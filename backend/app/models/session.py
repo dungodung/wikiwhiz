@@ -50,6 +50,7 @@ class GuessAttempt(db.Model):
     lexical_score_raw = db.Column(db.Numeric(5, 4), nullable=False)
     degrees_value = db.Column(db.SmallInteger, nullable=True)
     degrees_capped = db.Column(db.Boolean, nullable=False, default=False)
+    degrees_pending = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     is_correct = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 

@@ -1,10 +1,4 @@
-const NUM_BUCKETS = 20
-
-// bucket 0 (coldest) -> hue 220 (blue), bucket 19 (hottest) -> hue 0 (red)
-function bucketColor(bucket) {
-  const hue = 220 - (bucket / (NUM_BUCKETS - 1)) * 220
-  return `hsl(${hue}, 75%, 50%)`
-}
+import { NUM_BUCKETS, bucketColor, temperatureLabel } from '../../lib/closeness'
 
 export default function ClosenessGradientBar({ bucket }) {
   return (
@@ -21,9 +15,7 @@ export default function ClosenessGradientBar({ bucket }) {
           />
         ))}
       </div>
-      <span className="closeness-bar__label">
-        {bucket == null ? 'Lexical closeness' : `${Math.round(((bucket + 1) / NUM_BUCKETS) * 100)}% close`}
-      </span>
+      <span className="closeness-bar__label">{bucket == null ? 'Lexical closeness' : temperatureLabel(bucket)}</span>
     </div>
   )
 }

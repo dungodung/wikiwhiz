@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from backend.app.extensions import db
+from backend.app.lib.slot_pattern import tile_shape
 from backend.app.models.article import Article
 from backend.app.models.clue import Clue
 from backend.app.models.daily_challenge import DailyChallenge
@@ -36,7 +37,7 @@ def _make_ready_article(db, title="Test Subject", pageid=100, n_clues=5):
         wiki_title=title,
         wiki_pageid=pageid,
         display_title=title,
-        slot_pattern=[{"type": "word", "len": len(title.replace(' ', ''))}],
+        slot_pattern=tile_shape(title),
         status="draft",
     )
     db.session.add(article)

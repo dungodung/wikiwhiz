@@ -23,6 +23,20 @@ export const useGameStore = create((set, get) => ({
     }
   },
 
+  // Silent re-fetch used to poll for a guess's degrees value finishing in
+  // the background (see GameBoard's polling effect) -- doesn't touch
+  // loading/error, so it never flashes the "loading puzzle" state or
+  // surfaces a transient failure as a page error.
+  refreshPuzzle: async () => {
+    const { dateStr } = get()
+    try {
+      const state = dateStr ? await api.getDay(dateStr) : await api.getToday()
+      set({ state })
+    } catch {
+      // best-effort; the next poll tick will just try again
+    }
+  },
+
   submitGuess: async (guessText) => {
     if (get().guessInProgress) return
     set({ guessInProgress: true, error: null })

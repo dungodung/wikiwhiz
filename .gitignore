@@ -16,3 +16,4 @@ backend/app/static/*
 *.log
 .pytest_cache/
 .coverage
+.claude/
