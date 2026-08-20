@@ -18,6 +18,7 @@ function initialLetters(slotPattern) {
 // (GameBoard) mounts this with `key={challenge_date}` so switching puzzles
 // remounts it with fresh state instead of needing a reset effect.
 export default function GuessPanel({ slotPattern, dateStr, onSubmit, disabled, guessCount, totalClues }) {
+  const tileBoardRef = useRef(null)
   const [letters, setLetters] = useState(() => initialLetters(slotPattern))
   const [hintMode, setHintMode] = useState(false)
   const [suggestions, setSuggestions] = useState(null)
@@ -43,6 +44,10 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, disabled, g
   useEffect(() => {
     if (guessCount > prevGuessCount.current) {
       clearLetters()
+      // Otherwise the last-filled tile (now empty) keeps DOM focus, and the
+      // player has to click before they can type their next guess even
+      // though clearing the board already signals "start over".
+      tileBoardRef.current?.focusFirst()
     }
     prevGuessCount.current = guessCount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +113,7 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, disabled, g
         Guess {guessCount + 1} of {totalClues}
       </p>
 
-      <TileBoard slotPattern={slotPattern} letters={letters} onLetterChange={setLetter} />
+      <TileBoard ref={tileBoardRef} slotPattern={slotPattern} letters={letters} onLetterChange={setLetter} />
 
       <div className="guess-panel__actions">
         <button

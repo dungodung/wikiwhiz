@@ -21,7 +21,7 @@ export default function AboutContent() {
       <p>
         WikiWhiz is an independent, community-run Wikimedia Toolforge project
         built by Filip Maljković (
-        <a href="https://en.wikipedia.org/wiki/User:Dungodung" target="_blank" rel="noopener noreferrer">
+        <a href="https://meta.wikimedia.org/wiki/User:Dungodung" target="_blank" rel="noopener noreferrer">
           User:Dungodung
         </a>
         ). Source code and issue tracking live on the project's GitLab repository.

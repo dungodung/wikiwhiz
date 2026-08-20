@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
 // Renders the flat tile board from the backend (Article.slot_pattern, see
 // backend/app/lib/slot_pattern.py): one row of tiles, all of them guessable
@@ -22,13 +22,24 @@ import { useEffect, useRef } from 'react'
 
 const INTERACTIVE_SELECTOR = 'button, a, input, textarea, select, [role="button"], [tabindex]'
 
-export default function TileBoard({ slotPattern, letters = [], onLetterChange, readOnly, revealedTiles }) {
+const TileBoard = forwardRef(function TileBoard(
+  { slotPattern, letters = [], onLetterChange, readOnly, revealedTiles },
+  ref
+) {
   const inputRefs = useRef({})
   const length = slotPattern.length
 
   const focusTile = (index) => {
     inputRefs.current[index]?.focus()
   }
+
+  // Exposed so a parent can pull focus back to tile 0 after a submitted
+  // guess clears the board -- otherwise the last-filled tile (now empty)
+  // keeps DOM focus, and the player has to click before typing again even
+  // though they clearly want to start a fresh guess from the beginning.
+  useImperativeHandle(ref, () => ({
+    focusFirst: () => focusTile(0),
+  }))
 
   const stepTo = (fromIndex, direction) => {
     const next = fromIndex + direction
@@ -121,4 +132,6 @@ export default function TileBoard({ slotPattern, letters = [], onLetterChange, r
       ))}
     </div>
   )
-}
+})
+
+export default TileBoard
