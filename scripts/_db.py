@@ -25,8 +25,14 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 
 def _db_uri() -> str:
-    user = os.environ.get("DB_USER", "wikiwhiz")
-    password = os.environ.get("DB_PASSWORD", "wikiwhiz")
+    # Mirrors backend/app/config.py::_db_uri() -- TOOL_TOOLSDB_USER/PASSWORD
+    # are Toolforge's own auto-provisioned, read-only ToolsDB envvars, so a
+    # cron job (e.g. check_pool_level.py) running on Toolforge picks up the
+    # right credentials automatically. Locally neither var is set, so this
+    # falls through to DB_USER/DB_PASSWORD (the docker-compose mariadb)
+    # unchanged.
+    user = os.environ.get("TOOL_TOOLSDB_USER") or os.environ.get("DB_USER", "wikiwhiz")
+    password = os.environ.get("TOOL_TOOLSDB_PASSWORD") or os.environ.get("DB_PASSWORD", "wikiwhiz")
     host = os.environ.get("DB_HOST", "127.0.0.1")
     port = os.environ.get("DB_PORT", "3306")
     name = os.environ.get("DB_NAME", "wikiwhiz")
