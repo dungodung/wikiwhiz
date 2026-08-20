@@ -2,8 +2,15 @@ import os
 
 
 def _db_uri() -> str:
-    user = os.environ.get("DB_USER", "wikiwhiz")
-    password = os.environ.get("DB_PASSWORD", "wikiwhiz")
+    # TOOL_TOOLSDB_USER/PASSWORD are read-only system envvars Toolforge
+    # auto-provisions per-tool (see wikitech.wikimedia.org/wiki/Help:
+    # Toolforge/Envvars) -- preferring them over DB_USER/DB_PASSWORD means
+    # the ToolsDB credential is never manually copied into a second envvar
+    # by anyone deploying this, and stays in sync with whatever Toolforge
+    # itself manages/rotates. Local dev has neither var set, so it falls
+    # through to DB_USER/DB_PASSWORD (the docker-compose mariadb) unchanged.
+    user = os.environ.get("TOOL_TOOLSDB_USER") or os.environ.get("DB_USER", "wikiwhiz")
+    password = os.environ.get("TOOL_TOOLSDB_PASSWORD") or os.environ.get("DB_PASSWORD", "wikiwhiz")
     host = os.environ.get("DB_HOST", "127.0.0.1")
     port = os.environ.get("DB_PORT", "3306")
     name = os.environ.get("DB_NAME", "wikiwhiz")
