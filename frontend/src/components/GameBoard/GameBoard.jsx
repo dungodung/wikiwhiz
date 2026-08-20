@@ -83,7 +83,7 @@ export default function GameBoard() {
 
       <GuessHistory guesses={state.guesses} totalClues={state.total_clues_available} />
 
-      {error && <p className="game-board__status game-board__status--error">{error}</p>}
+      {error && <p className="game-board__status game-board__status--error game-board__status--inline">{error}</p>}
 
       <ClueFeed clues={state.clues_revealed} />
 
@@ -92,6 +92,7 @@ export default function GameBoard() {
           clues={state.remaining_clues}
           indexOffset={state.clues_revealed.length}
           dimmed
+          reverse
           heading="Clues you didn't need"
         />
       )}

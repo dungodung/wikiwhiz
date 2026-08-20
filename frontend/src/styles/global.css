@@ -129,6 +129,14 @@ body {
   color: var(--color-danger);
 }
 
+/* The base .game-board__status padding (2rem top/bottom) is sized for a
+   full-page loading/error state that replaces the whole board -- this
+   modifier is for the same message shown inline, next to the guess panel,
+   which needs much less breathing room. */
+.game-board__status--inline {
+  padding: 0.5rem 0;
+}
+
 .tile-board {
   display: flex;
   flex-wrap: wrap;
