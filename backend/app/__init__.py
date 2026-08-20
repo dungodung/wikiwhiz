@@ -50,8 +50,7 @@ def create_app(config_name: str = "production") -> Flask:
         return jsonify(
             {
                 "remote_addr": request.remote_addr,
-                "x_forwarded_for": request.headers.get("X-Forwarded-For"),
-                "x_real_ip": request.headers.get("X-Real-Ip"),
+                "headers": dict(request.headers),
             }
         )
 
