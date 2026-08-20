@@ -47,8 +47,10 @@ and scripts are run from the repo root with the venv active, e.g.:
    etymology, Wikisource excerpt, Wikivoyage fact, pageviews REST endpoint,
    top citation, `linkshere` count, longest section title, plus
    `creation_year`/`langlinks_count` as low-leakage fallbacks when a type
-   doesn't apply). Not every type applies to every article — that's fine,
-   see step 6.
+   doesn't apply). **Attempt the richer types first** — see
+   `references/candidate_criteria.md`'s "Diversify clue types" section
+   before defaulting to the easy/cheap ones. Not every type applies to every
+   article — that's fine, see step 6.
 
 5. **Draft clue text** for each fact per `references/clue_style_guide.md`
    (tone, length, how obscure vs. revealing each type should read). Before

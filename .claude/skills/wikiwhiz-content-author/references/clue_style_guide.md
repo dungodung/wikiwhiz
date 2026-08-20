@@ -26,6 +26,8 @@ revealing depending on the subject.
 | `long_section_title` | 2-3 |
 | `creation_year` | 2-3 |
 | `langlinks_count` | 2-3 |
+| `edit_count` | 2-3 |
+| `distinct_editor_count` | 2-3 |
 | `wikisource_excerpt` | 3 |
 | `wikivoyage_fact` | 3 |
 | `dyk_or_notable_fact` | 3-4 |
@@ -52,9 +54,18 @@ sets reasonable defaults, it doesn't need to be exact.
   — a date, a numeric fact, a role, a location.
 - **wikidata_fact**: phrase as a fact, not a Wikidata property dump ("has
   been recognized for contributions to X" rather than "P106: Q...").
-- **pageviews / creation_year / langlinks_count**: these exist as low-leakage
-  fallbacks to reach the 5-clue minimum when other types don't apply — keep
-  them factual and light, they're rarely the most interesting clue in the
-  set.
+- **pageviews / creation_year / langlinks_count / incoming_links**: these
+  exist as low-leakage fallbacks to reach the 5-clue minimum when the richer
+  types don't pan out — see `references/candidate_criteria.md`'s "Diversify
+  clue types" section. Don't reach for these first; keep them factual and
+  light when you do use them, since they're rarely the most interesting clue
+  in the set.
+- **edit_count / distinct_editor_count**: unlike the fallbacks above, these
+  are a real first-tier option, not a last resort — an exact "revised over
+  4,000 times" or "edited by over 800 different people" is a genuinely
+  interesting, hard-to-guess-from stat, and (via the Wiki Replica) cheap to
+  get exactly regardless of article size. Phrase as an approximate lower
+  bound ("over N") rather than the precise figure, so it doesn't read like a
+  literal answer to search for.
 - **top_citation**: double-check the citation's own title/author name
   doesn't itself give away the subject.

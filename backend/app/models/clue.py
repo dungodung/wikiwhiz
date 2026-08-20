@@ -17,6 +17,8 @@ CLUE_TYPES = (
     "long_section_title",
     "creation_year",
     "langlinks_count",
+    "edit_count",
+    "distinct_editor_count",
 )
 
 
