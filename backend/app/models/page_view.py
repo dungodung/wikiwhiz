@@ -3,10 +3,12 @@ from ..extensions import db
 
 class PageViewStat(db.Model):
     """Aggregated daily page-view counts by country -- deliberately not a
-    per-visit event log: no IP is ever stored (see lib/geolocation.py), and
-    no per-visit timestamp either, just a running total per (country, date).
-    Incremented by lib/page_views.py whenever the frontend's index.html is
-    served to a non-bot request.
+    per-visit event log: no IP address is ever stored or even seen by this
+    backend (country resolution happens client-side, see lib/page_views.py's
+    module docstring for why), and no per-visit timestamp either, just a
+    running total per (country, date). Incremented via POST
+    /api/info/page-view once per real frontend page load, for non-bot
+    requests.
     """
 
     __tablename__ = "page_view_stats"

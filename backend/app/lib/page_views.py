@@ -1,26 +1,31 @@
 """Anonymous, aggregated page-view tracking: increments a per-(country,
-date) counter whenever the frontend's index.html is served to what looks
-like a real visitor. See lib/geolocation.py for the IP -> country lookup
-(the IP itself is never stored) and models/page_view.py for why this is
-aggregated counts rather than a per-visit log.
+date) counter for each real page load. See models/page_view.py for why
+this is aggregated counts rather than a per-visit log.
+
+Country resolution happens client-side (see frontend/src/lib/geolocation.js),
+not here -- confirmed live this session that Toolforge's edge network
+strips the real visitor IP before it ever reaches a tool's container
+(X-Forwarded-For / X-Envoy-External-Address both showed the platform's own
+internal address, never the visitor's), so server-side IP geolocation
+cannot work on this deployment target at all. The browser resolves its own
+country directly against a free geolocation service and POSTs just the
+resulting country code to /api/info/page-view -- this module never sees or
+stores an IP address, which if anything is a stronger privacy story than
+the originally-planned server-side lookup would have been.
 
 Bot filtering is a plain User-Agent substring denylist -- inherently
-best-effort (a bot can always spoof a browser UA), but that's an acceptable
-trade for "don't bother counting obvious bots" rather than a security
-control.
+best-effort, but a script/bot posting directly to this endpoint (rather
+than a browser that ran the client-side geolocation fetch first) is also a
+much smaller share of traffic than it would have been on every page load,
+since most simple bots never execute the frontend JS that triggers this
+call at all.
 """
 
-import logging
-import threading
 from datetime import date
 
-from flask import current_app
-
 from ..extensions import db
+from ..models.country import Country
 from ..models.page_view import PageViewStat
-from .geolocation import resolve_country
-
-logger = logging.getLogger(__name__)
 
 _BOT_UA_MARKERS = (
     "bot",
@@ -58,47 +63,25 @@ def is_bot_request(user_agent: str) -> bool:
     return any(marker in ua for marker in _BOT_UA_MARKERS)
 
 
-def record_page_view(ip: str, user_agent: str) -> None:
-    """Synchronous: resolves the country and increments today's count for
-    it. Called from a background thread in normal operation (see
-    track_page_view_async) since it does a live HTTP call and a DB write,
-    neither of which should block the page response -- exposed directly
-    here too since that's what tests call, and it's a reasonable thing for
-    any other synchronous caller to use directly.
+def record_page_view(country_code: str, user_agent: str) -> None:
+    """country_code: whatever the client's geolocation lookup returned,
+    already validated against the countries codebook -- falls back to the
+    'XX' sentinel for anything not recognized (a lookup failure the client
+    reported honestly, a made-up code, wrong casing, etc.) rather than
+    rejecting the request outright, since this is a best-effort stat, not
+    something worth failing a request over.
     """
     if is_bot_request(user_agent):
         return
 
-    country_code = resolve_country(ip)
-    today = date.today()
+    code = (country_code or "").strip().upper()
+    if not db.session.get(Country, code):
+        code = "XX"
 
-    stat = PageViewStat.query.filter_by(country_code=country_code, view_date=today).first()
+    today = date.today()
+    stat = PageViewStat.query.filter_by(country_code=code, view_date=today).first()
     if stat is None:
-        stat = PageViewStat(country_code=country_code, view_date=today, view_count=0)
+        stat = PageViewStat(country_code=code, view_date=today, view_count=0)
         db.session.add(stat)
     stat.view_count += 1
     db.session.commit()
-
-
-def track_page_view_async(ip: str, user_agent: str) -> None:
-    """Fire-and-forget from a request handler: a page load must never wait
-    on an external geolocation call. Mirrors
-    game/service.py::_spawn_live_degrees_computation's pattern for the same
-    reason -- a fresh app context is required since Flask-SQLAlchemy's
-    session is tied to the request's context, which will be gone by the
-    time this thread runs.
-    """
-    if is_bot_request(user_agent):
-        return
-
-    app = current_app._get_current_object()
-
-    def worker() -> None:
-        with app.app_context():
-            try:
-                record_page_view(ip, user_agent)
-            except Exception:
-                logger.exception("Page-view tracking failed")
-                db.session.rollback()
-
-    threading.Thread(target=worker, daemon=True).start()

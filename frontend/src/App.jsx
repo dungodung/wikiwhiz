@@ -7,6 +7,7 @@ import StatsPage from './components/Stats/StatsPage'
 import InfoPage from './components/Info/InfoPage'
 import AdminPage from './components/Admin/AdminPage'
 import { useAuthStore } from './state/authStore'
+import { reportPageView } from './lib/geolocation'
 
 function AdminRoute() {
   const { checked, isAdmin } = useAuthStore()
@@ -21,6 +22,13 @@ export default function App() {
   useEffect(() => {
     checkAuth()
   }, [checkAuth])
+
+  // App only mounts once per real page load (client-side route changes
+  // don't remount it), which is exactly "a page view" -- see
+  // lib/geolocation.js and backend/app/lib/page_views.py.
+  useEffect(() => {
+    reportPageView()
+  }, [])
 
   return (
     <div className="app">
