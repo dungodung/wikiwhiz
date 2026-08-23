@@ -387,12 +387,18 @@ body {
 }
 
 /* Guess history -- floats in the side margin on wide viewports (see the
-   max-width: 1100px media query below for the narrow-screen fallback,
-   where there's no margin to float into). */
+   max-width: 1650px media query below for the narrow-screen fallback,
+   where there's no margin to float into). The 960px below is double the
+   widest a tile row actually gets (the longest current answer, "Ludwig
+   van Beethoven" at 22 tiles, renders ~940px wide once it takes the
+   >=900px breakout in TileBoard's CSS) -- it used to be based on
+   .app__main's 720px reading column instead, which was fine before that
+   breakout existed but left this box overlapping the last tile(s) of any
+   answer long enough to actually use the wider row. */
 .guess-history {
   position: fixed;
   top: 7rem;
-  right: max(1rem, calc((100vw - 720px) / 2 - 320px));
+  right: max(1rem, calc((100vw - 960px) / 2 - 320px));
   width: 300px;
   max-height: calc(100vh - 8rem);
   overflow-y: auto;
@@ -1077,10 +1083,14 @@ a.guess-history__text:hover {
   align-items: center;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1650px) {
   /* No side margin to float into below this width -- fold the guess
      history back into the normal document flow instead of overlapping
-     the main column. */
+     the main column. Raised from 1100px alongside the 960px base above:
+     a 300px-wide fixed box can't clear a ~940px-wide centered tile row
+     and still sit near the right edge until the viewport is wide enough
+     for both, so below that point stacking is the only overlap-free
+     option, not just a stylistic preference. */
   .guess-history {
     position: static;
     width: auto;
