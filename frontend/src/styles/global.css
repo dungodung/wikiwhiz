@@ -145,9 +145,52 @@ body {
   padding: 1rem 0;
 }
 
+/* A closed word never breaks internally -- the outer .tile-board wraps only
+   between these groups (see TileBoard.jsx::groupIntoWords), so a long
+   answer wraps at a real space rather than mid-word. flex-shrink: 0 on both
+   the group and its tiles is load-bearing: without it, a group wider than
+   the viewport gets squeezed down to illegible slivers instead of the
+   .tile-board__tile size taking priority (flexbox prefers shrinking over
+   overflowing by default). */
+.tile-board__word {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+/* An "open" group (editable board, no confirmed trailing space yet -- see
+   groupIntoWords) has no real word boundary to protect, so it isn't a
+   nowrap unit at all: display:contents removes the wrapper from layout,
+   letting its tiles fall back to being direct children of the wrapping
+   outer .tile-board, exactly like a plain flat tile row. */
+.tile-board__word--open {
+  display: contents;
+}
+
+/* Below this, a long title (e.g. 22 tiles) can force the wrapped,
+   word-grouped layout above. From here up there's room for the whole row
+   on one line instead -- breaks out of .app__main's narrower reading-column
+   width (rather than every element on the page getting wider) via the
+   negative-margin full-bleed trick, bounded by max-width so it doesn't
+   stretch absurdly on an ultra-wide monitor. overflow-x is a safety net for
+   a hypothetical future title too long even for that bound -- horizontal
+   scroll beats a broken layout. */
+@media (min-width: 900px) {
+  .tile-board {
+    flex-wrap: nowrap;
+    width: 100vw;
+    max-width: 1200px;
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+    overflow-x: auto;
+  }
+}
+
 .tile-board__tile {
   width: 2.4rem;
   height: 2.9rem;
+  flex-shrink: 0;
   border: none;
   border-bottom: 3px solid var(--color-accent);
   background: transparent;
