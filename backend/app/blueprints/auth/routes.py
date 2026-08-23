@@ -67,4 +67,32 @@ def me():
     if user is None:
         session.pop("user_id", None)
         return jsonify({"authenticated": False})
-    return jsonify({"authenticated": True, "username": user.wikimedia_username, "is_admin": user.is_admin})
+    return jsonify(
+        {
+            "authenticated": True,
+            "username": user.wikimedia_username,
+            "is_admin": user.is_admin,
+            "hint_mode_preference": user.hint_mode_preference,
+        }
+    )
+
+
+@auth_bp.patch("/hint-mode")
+def update_hint_mode():
+    """Persists the logged-in player's hint-mode toggle so it carries over
+    between puzzles and sessions -- see GuessPanel.jsx. Anonymous play has
+    no user row to persist this on, so it's a 401 there, not a silent no-op
+    -- the frontend only calls this when it already knows it's authenticated.
+    """
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "not_authenticated"}), 401
+    user = db.session.get(User, user_id)
+    if user is None:
+        session.pop("user_id", None)
+        return jsonify({"error": "not_authenticated"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    user.hint_mode_preference = bool(payload.get("enabled"))
+    db.session.commit()
+    return jsonify({"hint_mode_preference": user.hint_mode_preference})

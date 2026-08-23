@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
+import { useAuthStore } from '../../state/authStore'
 import TileBoard from './TileBoard'
 
 const PLACEHOLDER = '_'
@@ -20,7 +21,19 @@ function initialLetters(slotPattern) {
 export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, disabled, guessCount, totalClues }) {
   const tileBoardRef = useRef(null)
   const [letters, setLetters] = useState(() => initialLetters(slotPattern))
-  const [hintMode, setHintMode] = useState(false)
+  const authenticated = useAuthStore((s) => s.authenticated)
+  const hintModePreference = useAuthStore((s) => s.hintModePreference)
+  const setHintModePreference = useAuthStore((s) => s.setHintModePreference)
+  // Seeded from the logged-in player's saved preference at mount time --
+  // GuessPanel remounts per puzzle (see the component comment above), so
+  // this naturally re-applies on every new puzzle without extra wiring.
+  // Anonymous play has nowhere to persist a preference, so it always
+  // starts off, same as before this feature existed.
+  const [hintMode, setHintModeState] = useState(() => (authenticated ? hintModePreference : false))
+  const setHintMode = (next) => {
+    setHintModeState(next)
+    if (authenticated) setHintModePreference(next)
+  }
   const [suggestions, setSuggestions] = useState(null)
   const [hintLoading, setHintLoading] = useState(false)
   const [hintError, setHintError] = useState(null)
@@ -139,7 +152,7 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
         <button
           type="button"
           className="hint-panel__toggle"
-          onClick={() => setHintMode((v) => !v)}
+          onClick={() => setHintMode(!hintMode)}
           aria-expanded={hintMode}
           title="Fill in any letters (or spaces, dashes, commas, parentheses) you're confident about — leave the rest blank. Matches update as you type."
         >

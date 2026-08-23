@@ -29,6 +29,8 @@ export const api = {
   getHint: (dateStr, pattern) => request(`/game/day/${dateStr}/hint?pattern=${encodeURIComponent(pattern)}`),
   me: () => request('/auth/me'),
   logout: () => request('/auth/logout', { method: 'POST' }),
+  setHintModePreference: (enabled) =>
+    request('/auth/hint-mode', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
   myStats: () => request('/stats/me'),
 
   admin: {
