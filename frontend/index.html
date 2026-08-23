@@ -6,6 +6,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WikiWhiz</title>
     <meta name="description" content="Guess the day's Wikipedia article from a series of clues." />
+
+    <!-- Social preview cards (Open Graph + Twitter). This is a static SPA
+         shell served for every route (see backend/app/__init__.py's
+         catch-all), so this is one general site-wide card, not a
+         per-puzzle one -- a crawler never runs the frontend JS, so a
+         dynamic per-puzzle card would need real server-side rendering,
+         which this deploy shape (prebuilt static index.html served by
+         Flask, see docs/deployment-toolforge.md) doesn't have. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WikiWhiz" />
+    <meta property="og:title" content="WikiWhiz" />
+    <meta property="og:description" content="Guess the day's Wikipedia article from a series of clues." />
+    <meta property="og:url" content="https://wikiwhiz.toolforge.org/" />
+    <meta property="og:image" content="https://wikiwhiz.toolforge.org/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="WikiWhiz: guess the day's Wikipedia article from a series of clues" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="WikiWhiz" />
+    <meta name="twitter:description" content="Guess the day's Wikipedia article from a series of clues." />
+    <meta name="twitter:image" content="https://wikiwhiz.toolforge.org/og-image.png" />
   </head>
   <body>
     <div id="root"></div>
