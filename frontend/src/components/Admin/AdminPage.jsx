@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import AdminUsers from './AdminUsers'
 import AdminArticles from './AdminArticles'
 import AdminSchedule from './AdminSchedule'
@@ -11,8 +11,14 @@ const TABS = {
   users: { label: 'Users', Component: AdminUsers },
 }
 
+// Tab comes from the URL (see App.jsx's /admin/:tab route) rather than
+// local state, so a refresh or a shared/bookmarked link lands back on the
+// same subpage instead of always resetting to the first tab.
 export default function AdminPage() {
-  const [tab, setTab] = useState('articles')
+  const { tab } = useParams()
+  const navigate = useNavigate()
+
+  if (!TABS[tab]) return <Navigate to="/admin/articles" replace />
   const { Component } = TABS[tab]
 
   return (
@@ -23,7 +29,7 @@ export default function AdminPage() {
             key={key}
             type="button"
             className={tab === key ? 'admin-page__tab admin-page__tab--active' : 'admin-page__tab'}
-            onClick={() => setTab(key)}
+            onClick={() => navigate(`/admin/${key}`)}
           >
             {label}
           </button>

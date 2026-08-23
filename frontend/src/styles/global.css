@@ -175,14 +175,29 @@ body {
    negative-margin full-bleed trick, bounded by max-width so it doesn't
    stretch absurdly on an ultra-wide monitor. overflow-x is a safety net for
    a hypothetical future title too long even for that bound -- horizontal
-   scroll beats a broken layout. */
+   scroll beats a broken layout.
+
+   This needs two nested elements, not one: the negative-margin math below
+   only cancels out to exactly 100vw when the element's actual width is
+   100vw. Once max-width:1200px clamps the width on a wide screen, applying
+   both the breakout margins and the max-width to the same element leaves
+   its left edge pinned to the viewport's left edge instead of centered
+   (the margin was computed to offset a 100vw-wide box, not a 1200px one) --
+   the board hugs the left side instead of lining up with the clue panes
+   below it. So .tile-board-viewport does the (uncapped) viewport breakout,
+   and .tile-board is centered independently inside that full-width strip
+   via its own max-width + margin:auto. */
 @media (min-width: 900px) {
-  .tile-board {
-    flex-wrap: nowrap;
+  .tile-board-viewport {
     width: 100vw;
-    max-width: 1200px;
     margin-left: calc(-50vw + 50%);
     margin-right: calc(-50vw + 50%);
+  }
+
+  .tile-board {
+    flex-wrap: nowrap;
+    max-width: 1200px;
+    margin: 0 auto;
     overflow-x: auto;
   }
 }

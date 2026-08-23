@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Header from './components/Header/Header'
 import GameBoard from './components/GameBoard/GameBoard'
 import ArchivePage from './components/Archive/ArchivePage'
@@ -40,7 +40,8 @@ export default function App() {
           <Route path="/archive/:date" element={<GameBoard />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/info" element={<InfoPage />} />
-          <Route path="/admin" element={<AdminRoute />} />
+          <Route path="/admin" element={<Navigate to="/admin/articles" replace />} />
+          <Route path="/admin/:tab" element={<AdminRoute />} />
         </Routes>
       </main>
     </div>

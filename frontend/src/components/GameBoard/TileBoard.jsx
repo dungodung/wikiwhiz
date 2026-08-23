@@ -137,42 +137,46 @@ const TileBoard = forwardRef(function TileBoard(
   if (readOnly) {
     const values = slotPattern.split('').map((_, i) => (revealedTiles ? revealedTiles[i] : ''))
     return (
-      <div className="tile-board" role="group" aria-label="Answer tiles">
-        {groupIntoWords(values).map((group, gi) => (
-          <span className="tile-board__word" key={gi}>
-            {group.indices.map((i) => (
-              <span key={i} className="tile-board__tile tile-board__tile--filled">
-                {values[i]}
-              </span>
-            ))}
-          </span>
-        ))}
+      <div className="tile-board-viewport">
+        <div className="tile-board" role="group" aria-label="Answer tiles">
+          {groupIntoWords(values).map((group, gi) => (
+            <span className="tile-board__word" key={gi}>
+              {group.indices.map((i) => (
+                <span key={i} className="tile-board__tile tile-board__tile--filled">
+                  {values[i]}
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
       </div>
     )
   }
 
   const values = slotPattern.split('').map((_, i) => letters[i] || '')
   return (
-    <div className="tile-board" role="group" aria-label="Answer tiles">
-      {groupIntoWords(values, { allowOpenTrailing: true }).map((group, gi) => (
-        <span className={`tile-board__word${group.closed ? '' : ' tile-board__word--open'}`} key={gi}>
-          {group.indices.map((i) => (
-            <input
-              key={i}
-              ref={(el) => {
-                inputRefs.current[i] = el
-              }}
-              className="tile-board__tile"
-              maxLength={1}
-              value={letters[i] || ''}
-              onChange={(e) => handleChange(i, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              onFocus={(e) => e.target.select()}
-              aria-label={`Tile ${i + 1}`}
-            />
-          ))}
-        </span>
-      ))}
+    <div className="tile-board-viewport">
+      <div className="tile-board" role="group" aria-label="Answer tiles">
+        {groupIntoWords(values, { allowOpenTrailing: true }).map((group, gi) => (
+          <span className={`tile-board__word${group.closed ? '' : ' tile-board__word--open'}`} key={gi}>
+            {group.indices.map((i) => (
+              <input
+                key={i}
+                ref={(el) => {
+                  inputRefs.current[i] = el
+                }}
+                className="tile-board__tile"
+                maxLength={1}
+                value={letters[i] || ''}
+                onChange={(e) => handleChange(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                onFocus={(e) => e.target.select()}
+                aria-label={`Tile ${i + 1}`}
+              />
+            ))}
+          </span>
+        ))}
+      </div>
     </div>
   )
 })
