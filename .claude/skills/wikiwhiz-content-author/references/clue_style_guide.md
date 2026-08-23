@@ -60,11 +60,11 @@ sets reasonable defaults, it doesn't need to be exact.
   clue types" section. Don't reach for these first; keep them factual and
   light when you do use them, since they're rarely the most interesting clue
   in the set.
-- **edit_count / distinct_editor_count**: unlike the fallbacks above, these
-  are a real first-tier option, not a last resort — an exact "revised over
-  4,000 times" or "edited by over 800 different people" is a genuinely
-  interesting, hard-to-guess-from stat, and (via the Wiki Replica) cheap to
-  get exactly regardless of article size. Phrase as an approximate lower
+- **edit_count / distinct_editor_count**: a genuinely interesting stat when
+  you do reach for one ("revised over 4,000 times", "edited by over 800
+  different people") — but per `references/candidate_criteria.md`'s "Facts
+  before stats" section, still a stat, still last-resort after the fact
+  types, and never both on the same article. Phrase as an approximate lower
   bound ("over N") rather than the precise figure, so it doesn't read like a
   literal answer to search for.
 - **top_citation**: double-check the citation's own title/author name

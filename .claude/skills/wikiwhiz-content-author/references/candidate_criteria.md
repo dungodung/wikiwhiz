@@ -111,23 +111,46 @@ richer types takes more digging per article (an infobox parse, a Wikidata
 claims lookup, checking for a DYK/Wikisource/Wikivoyage match), and it's
 easy to lazily reach for the cheap API calls instead.
 
-For every article, **attempt at least 3 of the "richer" types before
-falling back to fill remaining slots with the low-leakage ones**:
-`commons_image`, `wikidata_fact`, `infobox_fact`, `etymology` (if
-applicable), `wikisource_excerpt` (if applicable), `wikivoyage_fact` (if
-geographic), `dyk_or_notable_fact`, `top_citation`, `edit_count`,
-`distinct_editor_count`. Only reach for `pageviews`, `creation_year`,
-`langlinks_count`, or `incoming_links` to fill out the remaining slots —
-never as the first three picks — and vary *which* of those fallbacks you use
-across articles too, rather than always reaching for the same pair.
+## Facts before stats -- a hard preference, not just "try richer types"
 
-## `edit_count` / `distinct_editor_count` (Wiki Replica only)
+Every clue type falls into one of two buckets:
+
+- **Fact types** — a real, specific thing about the subject itself:
+  `categories`, `long_section_title`, `dyk_or_notable_fact`, `wikidata_fact`,
+  `infobox_fact`, `etymology`, `commons_image`, `top_citation`,
+  `wikisource_excerpt`, `wikivoyage_fact`.
+- **Stat types** — a number about the *Wikipedia article*, not the subject:
+  `incoming_links`, `edit_count`, `distinct_editor_count`, `langlinks_count`,
+  `creation_year`, `pageviews`.
+
+**Exhaust the fact types for a given article before reaching for any stat
+type at all.** A follow-up live spot-check (after the "attempt 3 richer
+types" rule above was already in place) still found several articles
+carrying 3-4 stat clues out of 6-7 total — `edit_count` and
+`distinct_editor_count` in particular kept getting used *together* on the
+same article, which is doubly redundant (they measure nearly the same
+thing, and neither is about the subject at all). "Richer" wasn't a strong
+enough word — stats are easy to reach for precisely because they don't
+require the digging real facts do, so without an explicit ordering they
+creep back in as filler by default. The `incoming_links` exact count is the
+one stat type worth keeping around as a real first-tier pick when a fact
+genuinely doesn't pan out (it varies by orders of magnitude between
+articles, unlike `creation_year`/`langlinks_count`, which barely
+discriminate at all) — but it's still a stat, so it still comes after facts,
+never before. Target **at most one stat-type clue per article**, and only
+after every fact type that could plausibly apply has actually been tried
+and either used or ruled out — not just skipped for convenience.
+
+## `edit_count` / `distinct_editor_count` (Wiki Replica only, last resort)
 
 Both need the Wiki Replica connection described above (see "Querying the
 Wiki Replica directly") — there's no reasonably cheap Action API equivalent
 for either at the scale a well-established FA/GA article's revision history
 reaches (thousands to tens of thousands of revisions; `prop=revisions` caps
-at 500/5000 per call).
+at 500/5000 per call). Useful when the fact types have genuinely run dry,
+but per the "facts before stats" rule above, don't reach for these first,
+and never use both on the same article -- pick whichever is more
+interesting for that specific subject, not both.
 
 ```sql
 -- total revisions
