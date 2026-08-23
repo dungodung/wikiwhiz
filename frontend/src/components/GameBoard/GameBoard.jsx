@@ -11,7 +11,8 @@ const DEGREES_POLL_INTERVAL_MS = 3000
 
 export default function GameBoard() {
   const { date: routeDate } = useParams()
-  const { state, loading, error, guessInProgress, loadPuzzle, submitGuess, refreshPuzzle } = useGameStore()
+  const { state, loading, error, guessInProgress, loadPuzzle, submitGuess, submitPass, refreshPuzzle } =
+    useGameStore()
 
   useEffect(() => {
     loadPuzzle(routeDate || null)
@@ -75,6 +76,7 @@ export default function GameBoard() {
           slotPattern={state.slot_pattern}
           dateStr={state.challenge_date}
           onSubmit={submitGuess}
+          onPass={submitPass}
           disabled={guessInProgress}
           guessCount={state.guesses.length}
           totalClues={state.total_clues_available}

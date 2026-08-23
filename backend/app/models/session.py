@@ -52,6 +52,7 @@ class GuessAttempt(db.Model):
     degrees_capped = db.Column(db.Boolean, nullable=False, default=False)
     degrees_pending = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     is_correct = db.Column(db.Boolean, nullable=False, default=False)
+    is_pass = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (db.Index("ix_guess_attempts_session", "game_session_id"),)

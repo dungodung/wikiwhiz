@@ -347,13 +347,19 @@ body {
   cursor: not-allowed;
 }
 
-.guess-panel__clear {
+.guess-panel__clear,
+.guess-panel__pass {
   background: none;
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   border-radius: var(--radius);
   padding: 0.5rem 1rem;
   cursor: pointer;
+}
+
+.guess-panel__pass:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .guess-panel__count {
@@ -433,6 +439,20 @@ body {
 .guess-history__swatch--pending > * {
   display: inline-block;
   animation: spin 1.4s linear infinite;
+}
+
+/* A pass has no closeness/degrees to show -- a plain muted dash instead of
+   a colored swatch, so it reads as distinct from a real (if wrong) guess. */
+.guess-history__swatch--pass {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  text-shadow: none;
+  cursor: default;
+}
+
+.guess-history__text--pass {
+  font-style: italic;
+  color: var(--color-text-muted);
 }
 
 /* Positioned with `position: fixed` and JS-computed top/left (see

@@ -55,48 +55,58 @@ export default function GuessHistory({ guesses, totalClues }) {
         Guess {guesses.length} of {totalClues}
       </h3>
       <ul className="guess-history__list">
-        {guesses.map((g) => (
-          <li key={g.attempt_number} className="guess-history__item">
-            <span className="guess-history__number">{g.attempt_number}</span>
-            <span
-              className={`guess-history__swatch${g.degrees_pending ? ' guess-history__swatch--pending' : ''}`}
-              style={{ backgroundColor: bucketColor(g.lexical_score_bucket) }}
-              tabIndex={0}
-              role="button"
-              aria-label={
-                g.degrees_pending
-                  ? 'Degrees of Wikipedia still being calculated for this guess'
-                  : 'Closeness and degrees of Wikipedia for this guess'
-              }
-              onMouseEnter={(e) => showTooltip(e, g)}
-              onMouseLeave={hideTooltip}
-              onFocus={(e) => showTooltip(e, g)}
-              onBlur={hideTooltip}
-            >
-              {g.degrees_pending ? (
-                <span aria-hidden="true">⚙</span>
-              ) : g.degrees_capped ? (
-                '+'
-              ) : g.degrees_value === 0 ? (
-                <span aria-hidden="true">✓</span>
-              ) : (
-                g.degrees_value
-              )}
-            </span>
-            {g.resolved_title ? (
-              <a
-                className="guess-history__text"
-                href={wikipediaUrl(g.resolved_title)}
-                target="_blank"
-                rel="noopener noreferrer"
+        {guesses.map((g) =>
+          g.is_pass ? (
+            <li key={g.attempt_number} className="guess-history__item">
+              <span className="guess-history__number">{g.attempt_number}</span>
+              <span className="guess-history__swatch guess-history__swatch--pass" aria-hidden="true">
+                –
+              </span>
+              <span className="guess-history__text guess-history__text--pass">Passed</span>
+            </li>
+          ) : (
+            <li key={g.attempt_number} className="guess-history__item">
+              <span className="guess-history__number">{g.attempt_number}</span>
+              <span
+                className={`guess-history__swatch${g.degrees_pending ? ' guess-history__swatch--pending' : ''}`}
+                style={{ backgroundColor: bucketColor(g.lexical_score_bucket) }}
+                tabIndex={0}
+                role="button"
+                aria-label={
+                  g.degrees_pending
+                    ? 'Degrees of Wikipedia still being calculated for this guess'
+                    : 'Closeness and degrees of Wikipedia for this guess'
+                }
+                onMouseEnter={(e) => showTooltip(e, g)}
+                onMouseLeave={hideTooltip}
+                onFocus={(e) => showTooltip(e, g)}
+                onBlur={hideTooltip}
               >
-                {g.resolved_title}
-              </a>
-            ) : (
-              <span className="guess-history__text">{g.raw_guess_text}</span>
-            )}
-          </li>
-        ))}
+                {g.degrees_pending ? (
+                  <span aria-hidden="true">⚙</span>
+                ) : g.degrees_capped ? (
+                  '+'
+                ) : g.degrees_value === 0 ? (
+                  <span aria-hidden="true">✓</span>
+                ) : (
+                  g.degrees_value
+                )}
+              </span>
+              {g.resolved_title ? (
+                <a
+                  className="guess-history__text"
+                  href={wikipediaUrl(g.resolved_title)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {g.resolved_title}
+                </a>
+              ) : (
+                <span className="guess-history__text">{g.raw_guess_text}</span>
+              )}
+            </li>
+          )
+        )}
       </ul>
 
       {hovered && (

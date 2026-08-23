@@ -99,6 +99,26 @@ def _post_day_guess(target_date: date_cls):
     return response
 
 
+def _post_day_pass(target_date: date_cls):
+    daily_challenge = service.get_challenge_for_date(target_date)
+    if daily_challenge is None:
+        return jsonify({"error": "No puzzle is scheduled for this date yet — check back soon!"}), 404
+
+    user_id, anon_token, new_cookie_value = _get_identity()
+    session_row = service.get_or_create_session(daily_challenge, user_id, anon_token)
+
+    try:
+        service.process_pass(session_row, daily_challenge)
+    except service.GameError as exc:
+        return jsonify({"error": exc.message}), exc.status_code
+
+    state = service.serialize_state(session_row, daily_challenge, daily_challenge.article)
+    response = jsonify(state)
+    if new_cookie_value:
+        _set_anon_cookie(response, new_cookie_value)
+    return response
+
+
 @game_bp.get("/today")
 def today():
     return _get_day_state(service.today_utc())
@@ -107,6 +127,11 @@ def today():
 @game_bp.post("/guess")
 def guess():
     return _post_day_guess(service.today_utc())
+
+
+@game_bp.post("/pass")
+def pass_turn():
+    return _post_day_pass(service.today_utc())
 
 
 @game_bp.get("/archive")
@@ -133,6 +158,14 @@ def day_guess(date_str: str):
     if target_date is None:
         return jsonify({"error": "invalid_date"}), 400
     return _post_day_guess(target_date)
+
+
+@game_bp.post("/day/<date_str>/pass")
+def day_pass(date_str: str):
+    target_date = _parse_date(date_str)
+    if target_date is None:
+        return jsonify({"error": "invalid_date"}), 400
+    return _post_day_pass(target_date)
 
 
 @game_bp.get("/day/<date_str>/hint")

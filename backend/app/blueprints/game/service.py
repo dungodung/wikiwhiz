@@ -154,6 +154,7 @@ def serialize_state(session_row: GameSession | None, daily_challenge: DailyChall
             "degrees_capped": g.degrees_capped,
             "degrees_pending": g.degrees_pending,
             "is_correct": g.is_correct,
+            "is_pass": g.is_pass,
         }
         for g in guess_attempts
     ]
@@ -428,4 +429,49 @@ def process_guess(
     if degrees_pending:
         _spawn_live_degrees_computation(article.id, attempt.id, resolved_pageid, client, degrees_config)
 
+    return attempt
+
+
+def process_pass(session_row: GameSession, daily_challenge: DailyChallenge) -> GuessAttempt:
+    """A pass burns an attempt exactly like a wrong guess (advances
+    clues_revealed/guesses_made, can end the game in a loss) but never
+    touches guess text at all -- no shape/leak check, no lexical score, no
+    degrees resolution, since there's nothing to resolve. is_pass=True on
+    the row is what lets the frontend show "Passed" instead of a
+    resolved-title link (see serialize_state below).
+    """
+    if session_row.status != "in_progress":
+        raise GameError("This puzzle is already finished.", status_code=409)
+
+    attempt_number = session_row.guesses_made + 1
+    attempt = GuessAttempt(
+        game_session_id=session_row.id,
+        attempt_number=attempt_number,
+        raw_guess_text="",
+        resolved_title=None,
+        resolved_pageid=None,
+        lexical_score_bucket=0,
+        lexical_score_raw=0,
+        degrees_value=None,
+        degrees_capped=False,
+        degrees_pending=False,
+        is_correct=False,
+        is_pass=True,
+    )
+    db.session.add(attempt)
+
+    session_row.guesses_made = attempt_number
+    total_clues = len(daily_challenge.clue_order)
+
+    if attempt_number >= total_clues:
+        session_row.status = "lost"
+        session_row.finished_at = datetime.now(timezone.utc)
+    else:
+        session_row.clues_revealed = min(session_row.clues_revealed + 1, total_clues)
+
+    counts_toward_stats = daily_challenge.challenge_date == today_utc()
+    if session_row.status == "lost" and session_row.user_id and counts_toward_stats:
+        _update_user_stats(session_row.user_id, won=False, attempt_number=None)
+
+    db.session.commit()
     return attempt

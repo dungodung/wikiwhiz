@@ -17,7 +17,7 @@ function initialLetters(slotPattern) {
 // tiles ARE the guess input now, not a separate free-text box. Parent
 // (GameBoard) mounts this with `key={challenge_date}` so switching puzzles
 // remounts it with fresh state instead of needing a reset effect.
-export default function GuessPanel({ slotPattern, dateStr, onSubmit, disabled, guessCount, totalClues }) {
+export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, disabled, guessCount, totalClues }) {
   const tileBoardRef = useRef(null)
   const [letters, setLetters] = useState(() => initialLetters(slotPattern))
   const [hintMode, setHintMode] = useState(false)
@@ -126,6 +126,15 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, disabled, g
         </button>
         <button type="button" className="guess-panel__clear" onClick={clearLetters} disabled={disabled}>
           Clear
+        </button>
+        <button
+          type="button"
+          className="guess-panel__pass"
+          onClick={onPass}
+          disabled={disabled}
+          title="Skip this guess and reveal the next clue -- counts as a miss, same as a wrong guess."
+        >
+          Pass
         </button>
         <button
           type="button"

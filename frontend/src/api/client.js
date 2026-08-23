@@ -20,8 +20,10 @@ export const api = {
   getToday: () => request('/game/today'),
   submitGuess: (guessText) =>
     request('/game/guess', { method: 'POST', body: JSON.stringify({ guess_text: guessText }) }),
+  submitPass: () => request('/game/pass', { method: 'POST' }),
   getArchive: () => request('/game/archive'),
   getDay: (dateStr) => request(`/game/day/${dateStr}`),
+  submitDayPass: (dateStr) => request(`/game/day/${dateStr}/pass`, { method: 'POST' }),
   submitDayGuess: (dateStr, guessText) =>
     request(`/game/day/${dateStr}/guess`, { method: 'POST', body: JSON.stringify({ guess_text: guessText }) }),
   getHint: (dateStr, pattern) => request(`/game/day/${dateStr}/hint?pattern=${encodeURIComponent(pattern)}`),

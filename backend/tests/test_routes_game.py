@@ -254,3 +254,44 @@ def test_refresh_does_not_reshuffle_clue_order(client, fixture_challenge):
     first = client.get("/api/game/today").get_json()
     second = client.get("/api/game/today").get_json()
     assert first["clues_revealed"] == second["clues_revealed"]
+
+
+# --- pass -------------------------------------------------------------
+
+def test_pass_reveals_next_clue_without_recording_guess_text(client, fixture_challenge):
+    resp = client.post("/api/game/pass")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "in_progress"
+    assert len(data["clues_revealed"]) == 2
+    assert data["guesses"][0]["is_pass"] is True
+    assert data["guesses"][0]["is_correct"] is False
+    assert data["guesses"][0]["raw_guess_text"] == ""
+    assert data["guesses"][0]["resolved_title"] is None
+
+
+def test_repeated_passes_are_all_allowed(client, fixture_challenge):
+    """Unlike a repeated real guess, nothing about a pass is a duplicate to
+    reject -- each one just burns another attempt.
+    """
+    for _ in range(3):
+        resp = client.post("/api/game/pass")
+        assert resp.status_code == 200
+    assert len(resp.get_json()["guesses"]) == 3
+
+
+def test_passing_out_every_clue_loses(client, fixture_challenge):
+    for _ in range(5):
+        resp = client.post("/api/game/pass")
+    data = resp.get_json()
+    assert data["status"] == "lost"
+    assert data["solved_answer_title"] == "Albert Einstein"
+    assert all(g["is_pass"] for g in data["guesses"])
+
+
+def test_cannot_pass_a_finished_game(client, fixture_challenge):
+    resp = client.post("/api/game/guess", json={"guess_text": "Albert Einstein"})
+    assert resp.get_json()["status"] == "won"
+
+    resp = client.post("/api/game/pass")
+    assert resp.status_code == 409

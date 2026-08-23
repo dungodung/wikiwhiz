@@ -48,4 +48,16 @@ export const useGameStore = create((set, get) => ({
       set({ error: err.message, guessInProgress: false })
     }
   },
+
+  submitPass: async () => {
+    if (get().guessInProgress) return
+    set({ guessInProgress: true, error: null })
+    try {
+      const { dateStr } = get()
+      const state = dateStr ? await api.submitDayPass(dateStr) : await api.submitPass()
+      set({ state, guessInProgress: false })
+    } catch (err) {
+      set({ error: err.message, guessInProgress: false })
+    }
+  },
 }))
