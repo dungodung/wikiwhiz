@@ -218,6 +218,25 @@ def test_correct_guess_wins(client, fixture_challenge):
     assert len(data["remaining_clues"]) == 4
 
 
+def test_redirect_to_the_answer_is_accepted_as_a_win(client, fixture_challenge):
+    """A guess that doesn't literally match display_title but resolves (via
+    client.resolve_title's redirect-following, mocked here through
+    verify_real_article) to the answer's own pageid must still win -- e.g. a
+    same-shape typo redirect ("Einstien" for "Einstein", still 8 letters).
+    Regression test: the tile-board redesign's exact-string win check
+    dropped the original free-text design's redirect-following entirely.
+    """
+    with patch(
+        "backend.app.blueprints.game.service.hint_search.verify_real_article",
+        return_value=VerifyResult(pageid=736, title="Albert Einstein"),
+    ):
+        resp = client.post("/api/game/guess", json={"guess_text": "Albert Einstien"})
+    data = resp.get_json()
+    assert data["status"] == "won"
+    assert data["guesses"][0]["is_correct"] is True
+    assert data["guesses"][0]["degrees_value"] == 0
+
+
 def test_in_progress_game_never_gets_remaining_clues(client, fixture_challenge):
     """An in-progress game must never see clues beyond what it's earned --
     that's the entire point of the reveal-on-wrong-guess mechanic. Only a

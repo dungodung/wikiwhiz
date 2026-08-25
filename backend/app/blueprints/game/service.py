@@ -371,6 +371,17 @@ def process_guess(
     is_correct = guess_tiles.lower() == answer_tiles.lower()
 
     resolved = None if is_correct else _resolve_wrong_guess(article, guess_tiles, client)
+    if resolved is not None and resolved.pageid == article.wiki_pageid:
+        # Didn't match display_title literally, but resolved (via
+        # _resolve_wrong_guess -> hint_search.verify_real_article ->
+        # client.resolve_title's redirect-following) to the exact same
+        # Wikipedia page -- e.g. a common alternate name or a same-shape
+        # typo redirect. The original free-text-guess design accepted
+        # any redirect to the answer as correct; the shape-locked tile
+        # board is stricter only about *length* (a redirect of a
+        # different length literally can't be typed in), not about
+        # which same-length string spells the answer.
+        is_correct = True
     raw_score = score_lexical(guess_tiles, answer_tiles)
     bucket = bucket_lexical(raw_score)
 
