@@ -76,15 +76,23 @@ class MediaWikiClient:
         """Exact title lookup, following redirects -- so a redirect page
         (e.g. a common alternate name or a concatenated-no-space variant)
         resolves straight to its real target rather than being missed.
-        Returns {"pageid", "title"} (the target's, if title was a redirect)
-        or None if no page or redirect exists under that exact title.
+        Returns {"pageid", "title", "redirected_from"} (the target's pageid
+        and title; "redirected_from" is the queried title itself if it was
+        a redirect page, else None -- callers that display a guess back to
+        the player want the page they actually typed, not silently swapped
+        for its target, see hint_search.verify_real_article) or None if no
+        page or redirect exists under that exact title.
         """
         data = self.query({"titles": title, "redirects": 1}, timeout=timeout)
+        redirected_from = None
+        redirects = data.get("query", {}).get("redirects")
+        if redirects:
+            redirected_from = redirects[0]["from"]
         pages = data.get("query", {}).get("pages", {})
         for pageid, page in pages.items():
             if pageid == "-1" or "missing" in page:
                 continue
-            return {"pageid": int(pageid), "title": page["title"]}
+            return {"pageid": int(pageid), "title": page["title"], "redirected_from": redirected_from}
         return None
 
     def prefix_search(self, query: str, limit: int = 8, timeout: float = _DEFAULT_TIMEOUT) -> list[dict]:

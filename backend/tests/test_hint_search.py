@@ -96,13 +96,32 @@ def test_verify_accepts_a_redirect_via_direct_title_lookup():
     client.search_intitle.assert_not_called()
 
 
-def test_verify_finds_a_match_via_sliding_window_when_direct_lookup_misses():
+def test_verify_shows_the_redirect_not_the_target_via_direct_lookup():
+    """Same display concern as the search-fallback version above
+    (test_verify_accepts_a_redirect_guess_via_search_redirecttitle), but for
+    a redirect caught by the *direct* exact-title lookup instead: resolve_title
+    reports the original queried title as "redirected_from" whenever the
+    query itself was a redirect page (see mediawiki_api.py), and that's what
+    should be shown back to the player -- not the target title MediaWiki's
+    response always carries in "title" regardless of redirect status.
+    """
+    client = MagicMock()
+    client.resolve_title.return_value = {"pageid": 736, "title": "Albert Einstein", "redirected_from": "A. Einstein"}
+
+    result = verify_real_article(client, "AEinstein")
+
+    assert result.found is True
+    assert result.pageid == 736
+    assert result.title == "A. Einstein"
+
+
+def test_verify_finds_a_match_via_search_when_direct_lookup_misses():
     """Spaces are preserved in a guess now (they're their own fixed, visible
     tile -- see lib/slot_pattern.py), so a properly-spaced guess of a real
     title usually resolves via the direct lookup above. But other stripped
     punctuation (e.g. an apostrophe) can still make the flattened guess
     differ from the real title text, so the direct exact-title lookup can
-    still miss -- this is what the sliding-window search is for.
+    still miss -- this is what the search fallback is for.
     """
     client = MagicMock()
     client.resolve_title.return_value = None
@@ -127,8 +146,15 @@ def test_verify_accepts_a_redirect_guess_via_search_redirecttitle():
     *target* article's, not the redirect's, so comparing that title against
     the guess's own (redirect) spelling never matches either. The
     `redirecttitle` prop is what actually carries the redirect's own title,
-    letting verify_real_article recognize the guess and still resolve to the
-    target's pageid/title for scoring.
+    letting verify_real_article recognize the guess.
+
+    The returned pageid is still the *target*'s (55, "Monkey") -- that's the
+    real graph node degrees/scoring need -- but the returned title is the
+    redirect's own ("Monkeys"), not the target's: this is what the game
+    displays back to the player in the guess history, and it should show
+    the page they actually typed, not one they never guessed (see
+    test_redirect_guess_display_shows_the_redirect_not_the_target in
+    test_routes_game.py for the end-to-end version of this).
     """
     client = MagicMock()
     client.resolve_title.return_value = None
@@ -142,7 +168,7 @@ def test_verify_accepts_a_redirect_guess_via_search_redirecttitle():
 
     assert result.found is True
     assert result.pageid == 55
-    assert result.title == "Monkey"
+    assert result.title == "Monkeys"
 
 
 def test_verify_search_fallback_queries_the_whole_guess_as_one_phrase():

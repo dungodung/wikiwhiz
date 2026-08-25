@@ -190,7 +190,10 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
         logger.warning("Guess verification lookup failed for guess_tiles=%r", guess_tiles, exc_info=True)
         return VerifyResult(unavailable=True)
     if direct is not None:
-        return VerifyResult(pageid=direct["pageid"], title=direct["title"])
+        # Show the player back the page they actually typed, not its
+        # redirect target -- resolved_pageid (used for scoring/degrees)
+        # stays the target's regardless; only the *display* title changes.
+        return VerifyResult(pageid=direct["pageid"], title=direct.get("redirected_from") or direct["title"])
 
     if len(guess_tiles) < MIN_VERIFY_SEARCH_LENGTH:
         return VerifyResult()
@@ -208,6 +211,9 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
             return VerifyResult(pageid=item["pageid"], title=title)
         redirect_title = item.get("redirecttitle")
         if redirect_title and normalize_to_tiles(redirect_title).lower() == guess_tiles.lower():
-            return VerifyResult(pageid=item["pageid"], title=title)
+            # Same reasoning as the direct-lookup branch above: pageid
+            # stays the target's for scoring, but what the player sees
+            # should be the redirect page they actually typed.
+            return VerifyResult(pageid=item["pageid"], title=redirect_title)
 
     return VerifyResult()
