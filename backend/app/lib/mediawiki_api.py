@@ -170,6 +170,15 @@ class MediaWikiClient:
         reliably filter results to the regex (returned plenty of titles that
         didn't match at all), so it's used here only to narrow the field;
         the real match check is a local Python regex over the results.
+
+        `srprop: redirecttitle` asks for which of a hit's incoming redirects
+        actually matched the query, when the match came through one --
+        `item["title"]`/`item["pageid"]` are always the target page's own
+        identity even then, never the redirect's, so without this prop
+        there's no way for a caller to tell a hit reached via redirect "X"
+        apart from one reached via the target's own title (see
+        hint_search.verify_real_article, which needs exactly that to accept
+        a guess that spells a redirect rather than the canonical title).
         """
         return self.query(
             {
@@ -177,7 +186,7 @@ class MediaWikiClient:
                 "srsearch": query,
                 "srnamespace": 0,
                 "srlimit": limit,
-                "srprop": "",
+                "srprop": "redirecttitle",
             },
             timeout=timeout,
         )

@@ -118,6 +118,34 @@ def test_verify_finds_a_match_via_sliding_window_when_direct_lookup_misses():
     assert result.title == "O'Brien Industries"
 
 
+def test_verify_accepts_a_redirect_guess_via_search_redirecttitle():
+    """Regression test: the tile board only ever sends uppercase (TileBoard.jsx
+    forces every character upper-case), so the direct exact-title lookup --
+    case-sensitive beyond a title's first letter -- routinely misses a real
+    redirect page (e.g. "MONKEYS" as a literal title lookup misses "Monkeys").
+    CirrusSearch's normal `list=search` also can't help by itself: when a
+    query matches via a redirect, the hit's own "title"/"pageid" are the
+    *target* article's, not the redirect's, so comparing that title against
+    the guess's own (redirect) spelling never matches either. The
+    `redirecttitle` prop is what actually carries the redirect's own title,
+    letting verify_real_article recognize the guess and still resolve to the
+    target's pageid/title for scoring.
+    """
+    client = MagicMock()
+    client.resolve_title.return_value = None
+    client.search_intitle.return_value = {
+        "query": {
+            "search": [{"title": "Monkey", "pageid": 55, "redirecttitle": "Monkeys"}],
+        }
+    }
+
+    result = verify_real_article(client, "MONKEYS")
+
+    assert result.found is True
+    assert result.pageid == 55
+    assert result.title == "Monkey"
+
+
 def test_verify_candidate_windows_include_whole_first_and_last_word():
     """Regression test: a live check confirmed CirrusSearch's phrase
     matching strongly favors whole words -- a mid-string slice like

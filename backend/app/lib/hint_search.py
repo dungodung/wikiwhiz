@@ -167,19 +167,34 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
     attempt (see game/service.py::process_guess).
 
     Tries an exact title lookup first (client.resolve_title, which follows
-    redirects) -- this is the *definitive* check, and it's the one that
-    matters most for redirects: a common alternate name or a concatenated
-    no-space variant (e.g. an initialism redirect) often exactly equals the
-    flattened guess, and must count as a real answer, not get discarded just
-    because it isn't the canonical title.
+    redirects) -- in principle the definitive check, since a common
+    alternate name or a concatenated no-space variant (e.g. an initialism
+    redirect) often exactly equals the flattened guess. In practice this
+    almost never fires for a *redirect* guess: the tile board only ever
+    sends uppercase (TileBoard.jsx forces every typed character to
+    upper-case), and MediaWiki only auto-capitalizes a title's first
+    letter -- `titles=MONKEYS` looks up the literal page "MONKEYS", not
+    "Monkeys", and misses. It's harmless for the *canonical* title of
+    whatever the guess resolves to, since that always gets independently
+    re-confirmed by the fallback search below regardless -- but a redirect
+    with no canonical-cased fallback route needs that fallback to actually
+    recognize it, which is what the redirecttitle check below is for.
 
-    Only if that exact lookup misses does this fall back to a multi-length
-    prefix/suffix search (see _verify_candidate_windows) plus the same
-    normalize_to_tiles() equality check search_titles_by_regex uses for
-    correctness. This can still, in principle, reject a genuinely real title
-    if none of the tried windows happen to land on a real word -- but it
-    will never accept a fake one, since acceptance always requires an exact
-    tile match.
+    The fallback tries a multi-length prefix/suffix search (see
+    _verify_candidate_windows) and accepts a hit either of two ways: its
+    own title matches the guess (the normalize_to_tiles() equality check
+    search_titles_by_regex also uses), or -- this is the case a redirect
+    guess actually needs -- CirrusSearch's `redirecttitle` prop says the
+    query matched via one of the hit's incoming redirects, and that
+    redirect's own title is what the guess spells (case-insensitively,
+    for the same reason the exact lookup above can't be relied on). A
+    search hit's `title`/`pageid` are always the *target* page's own
+    identity even when matched via redirecttitle, never the redirect's --
+    exactly the resolved title/pageid a redirect guess should score
+    against. This can still, in principle, reject a genuinely real title
+    if none of the tried windows happen to land on a real word or a real
+    redirect -- but it will never accept a fake one, since acceptance
+    always requires an exact tile match either way.
     """
     try:
         direct = client.resolve_title(guess_tiles)
@@ -203,6 +218,9 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
     for item in data.get("query", {}).get("search", []):
         title = item["title"]
         if normalize_to_tiles(title).lower() == guess_tiles.lower():
+            return VerifyResult(pageid=item["pageid"], title=title)
+        redirect_title = item.get("redirecttitle")
+        if redirect_title and normalize_to_tiles(redirect_title).lower() == guess_tiles.lower():
             return VerifyResult(pageid=item["pageid"], title=title)
 
     return VerifyResult()
