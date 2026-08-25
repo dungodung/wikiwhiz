@@ -129,36 +129,10 @@ def search_titles_by_regex(client: MediaWikiClient, slot_pattern: str, pattern: 
     return HintResult(matches=matches[:MAX_RESULTS], truncated=len(matches) > MAX_RESULTS)
 
 
-# Prefix/suffix lengths tried for candidate recall on a fully-specified
-# guess. A guess has no placeholders left, so there's no natural known-run
-# to anchor on the way hint search has -- but position 0 is *always* the
-# start of the real first word (whatever it turns out to be), and the last
-# character is *always* the end of the real last word, regardless of where
-# internal word breaks fall. Trying every length in this range from both
-# ends means one of them typically lands on an exact whole word, which
-# CirrusSearch's phrase matching strongly favors -- confirmed live: for
-# "ALBERT EINSTEIN" a mid-string slice like "ALBERT E" or "INSTEIN" (not a
-# whole word) fails to surface "Albert Einstein" at all, while the exact
-# 6-char prefix "ALBERT" does. This replaced an earlier dense-sliding-window
-# design that (a) generated windows straddling word boundaries as often as
-# landing on them and (b) once combined into one OR query past ~25-30
-# clauses, made CirrusSearch silently return zero results rather than an
-# error -- both confirmed live, not theoretical.
-MIN_VERIFY_WINDOW = 3
-MAX_VERIFY_WINDOW = 10
-
-
-def _verify_candidate_windows(guess_tiles: str) -> list[str]:
-    windows: list[str] = []
-    seen: set[str] = set()
-    upper = min(MAX_VERIFY_WINDOW, len(guess_tiles))
-    for size in range(MIN_VERIFY_WINDOW, upper + 1):
-        for window in (guess_tiles[:size], guess_tiles[-size:]):
-            key = window.lower()
-            if key not in seen:
-                seen.add(key)
-                windows.append(window)
-    return windows
+# Below this length the search fallback isn't worth calling -- too short a
+# phrase mostly returns noise, and check_guess_shape already rejects an
+# empty/near-empty guess before verify_real_article is ever reached anyway.
+MIN_VERIFY_SEARCH_LENGTH = 3
 
 
 def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResult:
@@ -180,21 +154,35 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
     with no canonical-cased fallback route needs that fallback to actually
     recognize it, which is what the redirecttitle check below is for.
 
-    The fallback tries a multi-length prefix/suffix search (see
-    _verify_candidate_windows) and accepts a hit either of two ways: its
-    own title matches the guess (the normalize_to_tiles() equality check
-    search_titles_by_regex also uses), or -- this is the case a redirect
-    guess actually needs -- CirrusSearch's `redirecttitle` prop says the
-    query matched via one of the hit's incoming redirects, and that
-    redirect's own title is what the guess spells (case-insensitively,
-    for the same reason the exact lookup above can't be relied on). A
-    search hit's `title`/`pageid` are always the *target* page's own
-    identity even when matched via redirecttitle, never the redirect's --
-    exactly the resolved title/pageid a redirect guess should score
-    against. This can still, in principle, reject a genuinely real title
-    if none of the tried windows happen to land on a real word or a real
-    redirect -- but it will never accept a fake one, since acceptance
-    always requires an exact tile match either way.
+    The fallback searches the *whole* guess as one phrase (`intitle:` plus
+    an unrestricted OR, same pattern as _candidate_query in
+    search_titles_by_regex, so a match reached only through a redirect's
+    indexed text still surfaces) rather than splitting it into smaller
+    prefix/suffix windows the way an earlier version of this function did.
+    That windowing was built for the wrong problem: it was worried about a
+    slice landing mid-word, but a fully-specified guess already has its
+    real (player-typed) spaces in it, so the whole phrase is already
+    word-aligned -- there's nothing left for windowing to fix, and live
+    testing found it actively hides the correct hit: querying "MONKEYS"
+    split into fragments like "MON"/"EYS"/"KEYS" pulls in tens of
+    thousands of unrelated articles that happen to contain one of those
+    fragments, pushing "Monkey" (a real redirect target) out of the top 50
+    results entirely, while the exact, unsplit phrase "MONKEYS" puts it in
+    first place.
+
+    A hit is accepted either of two ways: its own title matches the guess
+    (the normalize_to_tiles() equality check search_titles_by_regex also
+    uses), or -- the case a redirect guess actually needs -- CirrusSearch's
+    `redirecttitle` prop says the query matched via one of the hit's
+    incoming redirects, and that redirect's own title is what the guess
+    spells (case-insensitively, for the same reason the exact lookup above
+    can't be relied on). A search hit's `title`/`pageid` are always the
+    *target* page's own identity even when matched via redirecttitle, never
+    the redirect's -- exactly the resolved title/pageid a redirect guess
+    should score against. This can still, in principle, reject a genuinely
+    real title CirrusSearch just doesn't surface within CANDIDATE_FETCH_LIMIT
+    results -- but it will never accept a fake one, since acceptance always
+    requires an exact tile match either way.
     """
     try:
         direct = client.resolve_title(guess_tiles)
@@ -204,11 +192,10 @@ def verify_real_article(client: MediaWikiClient, guess_tiles: str) -> VerifyResu
     if direct is not None:
         return VerifyResult(pageid=direct["pageid"], title=direct["title"])
 
-    windows = _verify_candidate_windows(guess_tiles)
-    if not windows:
+    if len(guess_tiles) < MIN_VERIFY_SEARCH_LENGTH:
         return VerifyResult()
 
-    query = " OR ".join(f'"{w}"' for w in windows)
+    query = f'intitle:"{guess_tiles}" OR "{guess_tiles}"'
     try:
         data = client.search_intitle(query, limit=CANDIDATE_FETCH_LIMIT)
     except requests.RequestException:

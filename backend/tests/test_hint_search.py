@@ -4,7 +4,6 @@ import pytest
 import requests
 
 from backend.app.lib.hint_search import (
-    _verify_candidate_windows,
     build_regex,
     search_titles_by_regex,
     verify_real_article,
@@ -146,30 +145,26 @@ def test_verify_accepts_a_redirect_guess_via_search_redirecttitle():
     assert result.title == "Monkey"
 
 
-def test_verify_candidate_windows_include_whole_first_and_last_word():
-    """Regression test: a live check confirmed CirrusSearch's phrase
-    matching strongly favors whole words -- a mid-string slice like
-    "ALBERT E" or "INSTEIN" (spanning or falling short of a real word)
-    failed to surface "Albert Einstein" at all, while the exact 6-char
-    prefix "ALBERT" and 8-char suffix "EINSTEIN" did. Multiple prefix/suffix
-    lengths are tried specifically so one of them lands on the exact word.
+def test_verify_search_fallback_queries_the_whole_guess_as_one_phrase():
+    """Regression test: an earlier version of this fallback split the guess
+    into small prefix/suffix windows (e.g. "MON"/"EYS"/"KEYS" for "MONKEYS"),
+    which a live check found actively hides the correct hit -- those tiny
+    fragments match tens of thousands of unrelated articles, pushing the
+    real target out of the top CANDIDATE_FETCH_LIMIT results, while
+    searching the exact, unsplit phrase puts it first. A fully-specified
+    guess already has its real spaces in it, so the whole phrase is already
+    word-aligned -- there's no mid-word-slice risk windowing was guarding
+    against in the first place.
     """
-    windows = _verify_candidate_windows("ALBERT EINSTEIN")
-    assert "ALBERT" in windows
-    assert "EINSTEIN" in windows
+    client = MagicMock()
+    client.resolve_title.return_value = None
+    client.search_intitle.return_value = {"query": {"search": []}}
 
+    verify_real_article(client, "MONKEYS")
 
-def test_verify_candidate_windows_stay_within_query_complexity_limits():
-    """Regression test: a live check confirmed that once an OR-combined
-    CirrusSearch query passes somewhere around 25-30 clauses, it silently
-    returns zero results instead of erroring -- an earlier dense
-    sliding-window design could generate 30+ windows for a single guess and
-    hit this. The prefix/suffix design is bounded by construction (two
-    windows per length, MIN_VERIFY_WINDOW..MAX_VERIFY_WINDOW), so this stays
-    well under that regardless of guess length.
-    """
-    windows = _verify_candidate_windows("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN")
-    assert len(windows) <= 16
+    client.search_intitle.assert_called_once()
+    (query,), _ = client.search_intitle.call_args
+    assert query == 'intitle:"MONKEYS" OR "MONKEYS"'
 
 
 def test_verify_falls_back_to_search_when_no_exact_title_or_redirect_exists():
