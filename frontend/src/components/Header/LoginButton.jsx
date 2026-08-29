@@ -6,7 +6,7 @@ export default function LoginButton() {
   if (!authenticated) {
     return (
       <button type="button" className="login-button" onClick={login}>
-        Log in with Wikimedia
+        Log in<span className="login-button__full-text"> with Wikimedia</span>
       </button>
     )
   }

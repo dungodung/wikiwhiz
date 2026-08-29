@@ -49,8 +49,9 @@ body {
 /* Header */
 .app-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.5rem 1.5rem;
   padding: 0.9rem 1.5rem;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -89,6 +90,8 @@ body {
   padding: 0.5rem 0.9rem;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .login-button--authed {
@@ -1250,10 +1253,12 @@ a.guess-history__text:hover {
 @media (max-width: 720px) {
   /* No side margin to float into at this width either (matches
      .app__main's own max-width) -- fold back into normal flow, right at
-     the top of the guess panel where it already sits in the JSX. */
+     the top of the guess panel where it already sits in the JSX.
+     flex-end (not flex-start) keeps it right-aligned, matching where it
+     sits on wide viewports instead of jumping to the opposite side. */
   .hint-toggle {
     position: static;
-    align-self: flex-start;
+    align-self: flex-end;
     margin-bottom: 0.25rem;
   }
 }
@@ -1283,5 +1288,14 @@ a.guess-history__text:hover {
 
   .stats-page__summary {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* "Log in with Wikimedia" wrapped onto 3 lines inside the button at
+     this width (brand + nav + button all sharing one nowrap row, see
+     .app-header), forcing the whole header noticeably taller -- "Log in"
+     alone fits on one line. Full text (and its meaning) is still there
+     for anyone above this width. */
+  .login-button__full-text {
+    display: none;
   }
 }

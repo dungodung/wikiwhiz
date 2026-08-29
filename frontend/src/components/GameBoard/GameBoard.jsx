@@ -84,8 +84,6 @@ export default function GameBoard() {
         />
       )}
 
-      <GuessHistory guesses={state.guesses} totalClues={state.total_clues_available} />
-
       {error && <p className="game-board__status game-board__status--error game-board__status--inline">{error}</p>}
 
       <ClueFeed clues={state.clues_revealed} />
@@ -99,6 +97,13 @@ export default function GameBoard() {
           heading="Clues you didn't need"
         />
       )}
+
+      {/* Below the clues in document order -- .guess-history floats to the
+          side via position: fixed on wide viewports regardless of DOM
+          position, but folds to normal static flow on narrow ones (see its
+          own max-width: 1650px rule), where this ordering is what actually
+          determines "guesses below clues" on mobile. */}
+      <GuessHistory guesses={state.guesses} totalClues={state.total_clues_available} />
     </div>
   )
 }
