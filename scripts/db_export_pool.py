@@ -99,13 +99,25 @@ def main() -> int:
         link_nodes = session.query(LinkCacheNode).filter(
             LinkCacheNode.answer_article_id.in_(article_ids)
         ).all()
+        # No "id" column here, unlike every other exported table -- articles/
+        # clues/daily_challenges ids only ever originate from this same
+        # export workflow, so they stay in sync across environments, but
+        # link_cache_nodes' surrogate id is independently auto-assigned by
+        # each environment's own precompute runs (prod's original articles
+        # had their cache computed straight against prod). Exporting local
+        # dev's own id values collided with unrelated existing prod rows and
+        # got silently dropped by INSERT IGNORE on the primary-key conflict
+        # -- confirmed live, losing 159 rows across 2 articles. Prod
+        # auto-assigns a fresh id instead; the real de-dup key is the
+        # UNIQUE(answer_article_id, node_pageid) constraint, which INSERT
+        # IGNORE still enforces correctly without an explicit id.
         for stmt in _insert_statements(
             "link_cache_nodes",
-            ["id", "answer_article_id", "node_pageid", "node_title", "node_tiles", "degree",
+            ["answer_article_id", "node_pageid", "node_title", "node_tiles", "degree",
              "discovered_via", "computed_at"],
             [
                 {
-                    "id": n.id, "answer_article_id": n.answer_article_id,
+                    "answer_article_id": n.answer_article_id,
                     "node_pageid": n.node_pageid, "node_title": n.node_title,
                     "node_tiles": n.node_tiles,
                     "degree": n.degree, "discovered_via": n.discovered_via,

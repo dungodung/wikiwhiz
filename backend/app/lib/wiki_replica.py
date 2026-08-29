@@ -44,12 +44,30 @@ _QUERY_CHUNK_SIZE = 500  # SQL IN-lists tolerate far more than the API's
                          # implementation detail, not a shared contract with
                          # MediaWikiClient's own chunking.
 
+# links_batch/linkshere_batch have no server-side pagination the way the API
+# path does (mediawiki_api.py's lllimit/lhlimit + max_continuation_pages), so
+# a hub-adjacent frontier can otherwise return millions of edges from a
+# single query -- confirmed live: querying linkshere for ~1000 pageids one
+# BFS round out from "Blue whale" returned 11.6M rows / 3.1M candidate
+# titles and hung for 5+ minutes before this cap was added. Mirrors the
+# API's own accepted tradeoff (a hub node's edges get truncated rather than
+# exhaustively drained -- see precompute_link_cache.py's docstring) via a
+# per-target-node LIMIT (a ROW_NUMBER() window, ordered by pageid for
+# determinism) plus a much smaller IN-list chunk, so worst case per query is
+# bounded (chunk size * per-node cap) instead of unbounded.
+_LINK_PER_NODE_CAP = 500
+_LINK_CHUNK_SIZE = 50
+
 
 def _to_dbkey(title: str) -> str:
     return title.replace(" ", "_")
 
 
-def _from_dbkey(title: str) -> str:
+def _from_dbkey(title: str | bytes) -> str:
+    # page_title/lt_title are varbinary in MediaWiki's schema -- pymysql
+    # returns those as bytes, not str, unlike the rest of the row.
+    if isinstance(title, bytes):
+        title = title.decode("utf-8")
     return title.replace("_", " ")
 
 
@@ -80,18 +98,22 @@ class WikiReplicaClient:
         a single SQL query has no pagination concept.
         """
         out: dict[int, set[str]] = {pid: set() for pid in pageids}
-        for chunk in _chunks(pageids, _QUERY_CHUNK_SIZE):
+        for chunk in _chunks(pageids, _LINK_CHUNK_SIZE):
             placeholders = ",".join(["%s"] * len(chunk))
             sql = f"""
-                SELECT pl.pl_from AS from_pageid, lt.lt_title AS to_title
-                FROM pagelinks pl
-                JOIN linktarget lt ON lt.lt_id = pl.pl_target_id
-                WHERE pl.pl_from IN ({placeholders})
-                  AND pl.pl_from_namespace = 0
-                  AND lt.lt_namespace = 0
+                SELECT from_pageid, to_title FROM (
+                    SELECT pl.pl_from AS from_pageid, lt.lt_title AS to_title,
+                           ROW_NUMBER() OVER (PARTITION BY pl.pl_from ORDER BY lt.lt_id) AS rn
+                    FROM pagelinks pl
+                    JOIN linktarget lt ON lt.lt_id = pl.pl_target_id
+                    WHERE pl.pl_from IN ({placeholders})
+                      AND pl.pl_from_namespace = 0
+                      AND lt.lt_namespace = 0
+                ) ranked
+                WHERE rn <= %s
             """
             with self._conn.cursor() as cur:
-                cur.execute(sql, chunk)
+                cur.execute(sql, [*chunk, _LINK_PER_NODE_CAP])
                 for row in cur.fetchall():
                     out.setdefault(row["from_pageid"], set()).add(_from_dbkey(row["to_title"]))
         return out
@@ -107,21 +129,25 @@ class WikiReplicaClient:
         semantics (unlike outgoing links, which can point at red links).
         """
         out: dict[int, set[str]] = {pid: set() for pid in pageids}
-        for chunk in _chunks(pageids, _QUERY_CHUNK_SIZE):
+        for chunk in _chunks(pageids, _LINK_CHUNK_SIZE):
             placeholders = ",".join(["%s"] * len(chunk))
             sql = f"""
-                SELECT p_target.page_id AS target_pageid, p_from.page_title AS from_title
-                FROM page p_target
-                JOIN linktarget lt
-                  ON lt.lt_namespace = p_target.page_namespace
-                 AND lt.lt_title = p_target.page_title
-                JOIN pagelinks pl ON pl.pl_target_id = lt.lt_id AND pl.pl_from_namespace = 0
-                JOIN page p_from ON p_from.page_id = pl.pl_from
-                WHERE p_target.page_id IN ({placeholders})
-                  AND p_target.page_namespace = 0
+                SELECT target_pageid, from_title FROM (
+                    SELECT p_target.page_id AS target_pageid, p_from.page_title AS from_title,
+                           ROW_NUMBER() OVER (PARTITION BY p_target.page_id ORDER BY p_from.page_id) AS rn
+                    FROM page p_target
+                    JOIN linktarget lt
+                      ON lt.lt_namespace = p_target.page_namespace
+                     AND lt.lt_title = p_target.page_title
+                    JOIN pagelinks pl ON pl.pl_target_id = lt.lt_id AND pl.pl_from_namespace = 0
+                    JOIN page p_from ON p_from.page_id = pl.pl_from
+                    WHERE p_target.page_id IN ({placeholders})
+                      AND p_target.page_namespace = 0
+                ) ranked
+                WHERE rn <= %s
             """
             with self._conn.cursor() as cur:
-                cur.execute(sql, chunk)
+                cur.execute(sql, [*chunk, _LINK_PER_NODE_CAP])
                 for row in cur.fetchall():
                     out.setdefault(row["target_pageid"], set()).add(_from_dbkey(row["from_title"]))
         return out
@@ -143,7 +169,8 @@ class WikiReplicaClient:
             with self._conn.cursor() as cur:
                 cur.execute(sql, chunk)
                 for row in cur.fetchall():
-                    orig = dbkey_to_orig.get(row["page_title"], _from_dbkey(row["page_title"]))
+                    dbkey = row["page_title"].decode("utf-8") if isinstance(row["page_title"], bytes) else row["page_title"]
+                    orig = dbkey_to_orig.get(dbkey, _from_dbkey(dbkey))
                     result[orig] = row["page_id"]
         return result
 
@@ -182,10 +209,12 @@ def get_client() -> WikiReplicaClient | None:
         user = config.get("client", "user")
         password = config.get("client", "password")
         host = os.environ.get("WIKI_REPLICA_HOST") or f"{WIKI_DB}.analytics.db.svc.wikimedia.cloud"
+        port = int(os.environ.get("WIKI_REPLICA_PORT", "3306"))
         database = os.environ.get("WIKI_REPLICA_DB") or f"{WIKI_DB}_p"
         timeout = float(os.environ.get("WIKI_REPLICA_CONNECT_TIMEOUT_SEC", str(_DEFAULT_CONNECT_TIMEOUT_SEC)))
         connection = pymysql.connections.Connection(
             host=host,
+            port=port,
             database=database,
             user=user,
             password=password,

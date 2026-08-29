@@ -23,8 +23,15 @@ one primary language runtime per image — the Python buildpack can't also run
    become wikiwhiz
    sql wikiwhiz
    ```
-   Record the connection details (host is `tools.db.svc.wikimedia.cloud`;
-   credentials come from `replica.my.cnf` in the tool's home directory).
+   Record the connection details (host is `tools.db.svc.wikimedia.cloud`).
+   **Not** `replica.my.cnf`, despite that being the natural guess — that file
+   only holds read-only wiki-replica credentials and gets an `Access denied`
+   for the tool's own ToolsDB. The real ToolsDB credentials are the
+   Toolforge-auto-provisioned `TOOL_TOOLSDB_USER`/`TOOL_TOOLSDB_PASSWORD`
+   envvars (`toolforge envvars show TOOL_TOOLSDB_USER --raw`, etc. — see
+   "Getting content onto production" below for the full working incantation,
+   including two more non-obvious gotchas: the actual database name and a
+   TLS quirk).
 4. **Create the GitLab repo** at
    `gitlab.wikimedia.org/toolforge-repos/wikiwhiz` (via the Toolforge tool
    dashboard, which provisions this automatically) and add it as a remote.
@@ -102,8 +109,39 @@ Content is **authored locally** (where Claude Code runs — invoke the
 against production. To promote a batch:
 ```
 python3 scripts/db_export_pool.py --since-id <last-synced-article-id> > /tmp/pool_export.sql
-TOOLFORGE_USER=you DB_USER=... DB_PASSWORD=... scripts/sync_pool_to_prod.sh /tmp/pool_export.sql
 ```
 Track the watermark (the highest `articles.id` you've synced) yourself
 between runs — there's no separate table for it, it's just "the last id you
-passed to `--since-id` last time."
+passed to `--since-id` last time." If unsure, just ask ToolsDB itself first
+(see the query form below, swap in `SELECT MAX(id) FROM articles;`).
+
+`scripts/sync_pool_to_prod.sh` (a local SSH-tunnel + local `mysql` client) is
+untested/unverified as of this writing — `DB_USER`/`DB_PASSWORD` aren't even
+the right envvar names (see below). The verified working path instead runs
+the `mariadb` client *on the Toolforge bastion itself*, as the `wikiwhiz`
+tool user, piping the export straight in over that one SSH connection:
+```
+ssh <you>@login.toolforge.org 'become wikiwhiz -- bash -c '"'"'mariadb -h tools.db.svc.wikimedia.cloud --ssl-verify-server-cert=0 -u "$(toolforge envvars show TOOL_TOOLSDB_USER --raw)" -p"$(toolforge envvars show TOOL_TOOLSDB_PASSWORD --raw)" <toolaccount>__wikiwhiz_p'"'"'' < /tmp/pool_export.sql
+```
+Three non-obvious things this depends on, each cost real trial-and-error to
+find:
+- **Credentials**: not `DB_USER`/`DB_PASSWORD` (those aren't set on this
+  tool at all) and not `replica.my.cnf` (that's the read-only wiki-replica
+  file, scoped away from ToolsDB entirely) — it's the auto-provisioned
+  `TOOL_TOOLSDB_USER`/`TOOL_TOOLSDB_PASSWORD` envvars. They only resolve to
+  real values through `toolforge envvars show <NAME> --raw` (or inside an
+  actual running job/webservice) — they are *not* present as plain
+  environment variables in an interactive `become wikiwhiz` shell. Substitute
+  them in-line as shown above (`"$(toolforge envvars show ... --raw)"`)
+  rather than capturing the value anywhere, including in a Claude Code
+  transcript — it's a live production DB password.
+- **Database name**: ToolsDB namespaces every tool's database as
+  `<toolaccount>__<toolname>_p` (e.g. `s58001__wikiwhiz_p`), not the bare
+  tool name `wikiwhiz`. Find your own tool account's prefix via
+  `toolforge envvars show DB_NAME --raw` if you don't already know it.
+- **TLS**: connecting to `tools.db.svc.wikimedia.cloud` fails hostname
+  verification with any TLS-verifying client (`ERROR 2026 (HY000):
+  TLS/SSL error: Hostname verification failed`) — this is a known,
+  benign Cloud VPS quirk, not a real security issue since the connection
+  stays inside Cloud VPS's private network either way. Add
+  `--ssl-verify-server-cert=0` to the `mariadb` invocation to get past it.

@@ -33,7 +33,10 @@ def test_links_batch_returns_outgoing_links_and_converts_dbkeys():
     assert result == {736: {"George H. W. Bush", "Physics"}}
     sql, params = cursor.execute.call_args.args
     assert "%s" in sql
-    assert params == [736]
+    # Trailing param is the per-node cap (see _LINK_PER_NODE_CAP) -- a hub
+    # page's incoming/outgoing edges are otherwise unbounded, unlike the API
+    # path's lllimit/lhlimit + max_continuation_pages.
+    assert params == [736, 500]
 
 
 def test_links_batch_includes_pageids_with_no_links():
@@ -52,6 +55,23 @@ def test_linkshere_batch_returns_incoming_links():
     result = client.linkshere_batch([736])
 
     assert result == {736: {"Theory of relativity"}}
+
+
+def test_linkshere_batch_caps_incoming_links_per_node():
+    """Regression test: a hub-adjacent frontier's incoming links are
+    unbounded (any number of other pages can link to one target), unlike
+    the API path's lllimit/lhlimit + max_continuation_pages -- live testing
+    against the real Wiki Replicas found a single BFS round from a frontier
+    of ~1000 pageids returning 11.6M rows and hanging for 5+ minutes before
+    this per-node LIMIT (via a ROW_NUMBER() window) was added.
+    """
+    client, cursor = _mock_client_with_rows([])
+
+    client.linkshere_batch([736])
+
+    sql, params = cursor.execute.call_args.args
+    assert "ROW_NUMBER" in sql
+    assert params == [736, 500]
 
 
 def test_titles_to_pageids_converts_to_dbkey_for_query_and_back_for_result():

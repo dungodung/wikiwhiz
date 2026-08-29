@@ -224,6 +224,7 @@ export default function AdminArticles() {
               <th>Title</th>
               <th>Status</th>
               <th>Clues</th>
+              <th>Link cache</th>
               <th>Scheduled</th>
               <th />
             </tr>
@@ -234,6 +235,7 @@ export default function AdminArticles() {
                 <td>{a.display_title}</td>
                 <td>{a.status}</td>
                 <td>{a.clue_count}</td>
+                <td>{a.link_cache_count ?? '—'}</td>
                 <td>{a.scheduled_date || '—'}</td>
                 <td>
                   <button type="button" onClick={() => setSelectedId(a.id)}>Open</button>

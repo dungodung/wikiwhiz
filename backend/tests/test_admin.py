@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +8,7 @@ from backend.app.lib.slot_pattern import tile_shape
 from backend.app.models.article import Article
 from backend.app.models.clue import Clue
 from backend.app.models.daily_challenge import DailyChallenge
+from backend.app.models.link_cache import LinkCacheMeta
 from backend.app.models.session import GameSession
 from backend.app.models.user import User
 
@@ -109,6 +110,34 @@ def test_create_article_and_clue_then_reject_leaking_clue(client, db, admin_user
         json={"article_id": article_id, "clue_type": "categories", "clue_text": "Won two Nobel prizes in different sciences."},
     )
     assert resp.status_code == 201
+
+
+def test_list_articles_sorts_ascending_by_created_at(client, db, admin_user):
+    """Matches admin/schedule's own ordering (oldest/earliest first) --
+    previously this was newest-first (created_at.desc()).
+    """
+    older = _make_ready_article(db, title="Older One", pageid=301)
+    newer = _make_ready_article(db, title="Newer One", pageid=302)
+    older.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+    newer.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.session.commit()
+
+    resp = client.get("/api/admin/articles")
+    assert resp.status_code == 200
+    ids = [a["id"] for a in resp.get_json()["articles"]]
+    assert ids.index(older.id) < ids.index(newer.id)
+
+
+def test_list_articles_includes_link_cache_count(client, db, admin_user):
+    with_cache = _make_ready_article(db, title="Has Cache", pageid=303)
+    without_cache = _make_ready_article(db, title="No Cache Yet", pageid=304)
+    db.session.add(LinkCacheMeta(answer_article_id=with_cache.id, node_count=42, status="complete"))
+    db.session.commit()
+
+    resp = client.get("/api/admin/articles")
+    articles_by_id = {a["id"]: a for a in resp.get_json()["articles"]}
+    assert articles_by_id[with_cache.id]["link_cache_count"] == 42
+    assert articles_by_id[without_cache.id]["link_cache_count"] is None
 
 
 def test_cannot_edit_or_delete_locked_article(client, db, admin_user):

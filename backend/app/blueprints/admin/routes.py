@@ -23,6 +23,7 @@ from ...blueprints.game.service import today_utc
 from ...models.article import Article
 from ...models.clue import CLUE_TYPES, Clue
 from ...models.daily_challenge import DailyChallenge
+from ...models.link_cache import LinkCacheMeta
 from ...models.session import GameSession
 from ...models.user import User
 
@@ -68,7 +69,14 @@ def _serialize_clue(clue: Clue) -> dict:
     }
 
 
-def _serialize_article(article: Article, include_clues: bool = False) -> dict:
+def _serialize_article(article: Article, include_clues: bool = False, link_cache_count: int | None = -1) -> dict:
+    # link_cache_count defaults to a sentinel (-1) meaning "not looked up by
+    # the caller yet" -- list_articles batches this across all returned
+    # articles in one query instead of one-per-row, but single-article call
+    # sites can just let this fall back to a direct per-article lookup.
+    if link_cache_count == -1:
+        meta = db.session.get(LinkCacheMeta, article.id)
+        link_cache_count = meta.node_count if meta else None
     dc = article.daily_challenge
     data = {
         "id": article.id,
@@ -82,6 +90,7 @@ def _serialize_article(article: Article, include_clues: bool = False) -> dict:
         "scheduled_date": dc.challenge_date.isoformat() if dc else None,
         "locked": _article_is_locked(article),
         "clue_count": usable_clue_count(db.session, article.id),
+        "link_cache_count": link_cache_count,
     }
     if include_clues:
         clues_by_id = {c.id: c for c in article.clues}
@@ -141,8 +150,21 @@ def list_articles():
     query = Article.query
     if status:
         query = query.filter_by(status=status)
-    articles = query.order_by(Article.created_at.desc()).limit(200).all()
-    return jsonify({"articles": [_serialize_article(a) for a in articles]})
+    articles = query.order_by(Article.created_at).limit(200).all()
+    link_cache_counts = {
+        m.answer_article_id: m.node_count
+        for m in LinkCacheMeta.query.filter(
+            LinkCacheMeta.answer_article_id.in_([a.id for a in articles])
+        ).all()
+    }
+    return jsonify(
+        {
+            "articles": [
+                _serialize_article(a, link_cache_count=link_cache_counts.get(a.id))
+                for a in articles
+            ]
+        }
+    )
 
 
 @admin_bp.get("/articles/<int:article_id>")
