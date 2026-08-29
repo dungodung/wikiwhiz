@@ -16,6 +16,13 @@ async function request(path, options = {}) {
   return data
 }
 
+// { key, direction } -> '&sort=key&order=direction', or '' when unset --
+// shared by every paginated admin list so sort state threads through the
+// same way regardless of which page it's called from.
+function sortQuery(sort) {
+  return sort?.key ? `&sort=${encodeURIComponent(sort.key)}&order=${sort.direction === 'desc' ? 'desc' : 'asc'}` : ''
+}
+
 export const api = {
   getToday: () => request('/game/today'),
   submitGuess: (guessText) =>
@@ -34,18 +41,19 @@ export const api = {
   myStats: () => request('/stats/me'),
 
   admin: {
-    listUsers: (q = '', page = 1) => request(`/admin/users?q=${encodeURIComponent(q)}&page=${page}`),
+    listUsers: (q = '', page = 1, sort) =>
+      request(`/admin/users?q=${encodeURIComponent(q)}&page=${page}${sortQuery(sort)}`),
     promoteUser: (id) => request(`/admin/users/${id}/promote`, { method: 'POST' }),
     demoteUser: (id) => request(`/admin/users/${id}/demote`, { method: 'POST' }),
 
     searchArticleTitles: (q) => request(`/admin/article-lookup/search?q=${encodeURIComponent(q)}`),
     resolveArticleLookup: (title) => request(`/admin/article-lookup/resolve?title=${encodeURIComponent(title)}`),
 
-    articleStats: (page = 1) => request(`/admin/article-stats?page=${page}`),
+    articleStats: (page = 1, sort) => request(`/admin/article-stats?page=${page}${sortQuery(sort)}`),
 
-    listArticles: (status = '', page = 1, perPage) =>
+    listArticles: (status = '', page = 1, perPage, sort) =>
       request(
-        `/admin/articles?page=${page}${perPage ? `&per_page=${perPage}` : ''}${status ? `&status=${status}` : ''}`
+        `/admin/articles?page=${page}${perPage ? `&per_page=${perPage}` : ''}${status ? `&status=${status}` : ''}${sortQuery(sort)}`
       ),
     getArticle: (id) => request(`/admin/articles/${id}`),
     createArticle: (body) => request('/admin/articles', { method: 'POST', body: JSON.stringify(body) }),
@@ -63,7 +71,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(dateStr ? { date: dateStr } : {}),
       }),
-    listSchedule: (from, page = 1) => request(`/admin/schedule?from=${from}&page=${page}`),
+    listSchedule: (from, page = 1, sort) => request(`/admin/schedule?from=${from}&page=${page}${sortQuery(sort)}`),
     assignSchedule: (dateStr, articleId) =>
       request(`/admin/schedule/${dateStr}/assign`, { method: 'POST', body: JSON.stringify({ article_id: articleId }) }),
     unschedule: (dateStr) => request(`/admin/schedule/${dateStr}`, { method: 'DELETE' }),

@@ -918,6 +918,27 @@ a.guess-history__text:hover {
   border-bottom: 1px solid var(--color-border);
 }
 
+.admin-table th {
+  padding: 0;
+}
+
+.admin-table__sort-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.5rem 0.6rem;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-table__sort-btn:hover {
+  color: var(--color-accent);
+}
+
 .admin-pager {
   display: flex;
   align-items: center;

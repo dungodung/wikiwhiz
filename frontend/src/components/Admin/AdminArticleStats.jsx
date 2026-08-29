@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import Pager from './Pager'
+import SortableHeader from './SortableHeader'
+import useSort from './useSort'
 
 export default function AdminArticleStats() {
   const [rows, setRows] = useState([])
@@ -8,17 +10,23 @@ export default function AdminArticleStats() {
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [sort, onSort] = useSort('date', 'desc')
 
   useEffect(() => {
     api.admin
-      .articleStats(page)
+      .articleStats(page, sort)
       .then((data) => {
         setRows(data.articles)
         setTotalPages(data.total_pages)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [page])
+  }, [page, sort])
+
+  const changeSort = (key) => {
+    onSort(key)
+    setPage(1)
+  }
 
   return (
     <div className="admin-panel">
@@ -35,14 +43,19 @@ export default function AdminArticleStats() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Article</th>
-                <th>Date</th>
-                <th>Attempted</th>
-                <th>Won (total)</th>
-                <th>Won (registered)</th>
-                <th>Failed (total)</th>
-                <th>Failed (registered)</th>
-                <th>Avg. guess to win</th>
+                <SortableHeader label="Article" sortKey="article" sort={sort} onSort={changeSort} />
+                <SortableHeader label="Date" sortKey="date" sort={sort} onSort={changeSort} />
+                <SortableHeader label="Attempted" sortKey="attempted" sort={sort} onSort={changeSort} />
+                <SortableHeader label="Won (total)" sortKey="won_total" sort={sort} onSort={changeSort} />
+                <SortableHeader label="Won (registered)" sortKey="won_registered" sort={sort} onSort={changeSort} />
+                <SortableHeader label="Failed (total)" sortKey="failed_total" sort={sort} onSort={changeSort} />
+                <SortableHeader
+                  label="Failed (registered)"
+                  sortKey="failed_registered"
+                  sort={sort}
+                  onSort={changeSort}
+                />
+                <SortableHeader label="Avg. guess to win" sortKey="avg_win_guess" sort={sort} onSort={changeSort} />
               </tr>
             </thead>
             <tbody>

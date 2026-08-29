@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import ArticleDetail from './ArticleDetail'
 import Pager from './Pager'
+import SortableHeader from './SortableHeader'
+import useSort from './useSort'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 250
 
@@ -180,16 +182,20 @@ function NewArticleForm({ onCreated }) {
 }
 
 export default function AdminArticles() {
-  const [status, setStatus] = useState('')
+  // "Scheduled" (future, unplayed days) is the default view -- past/played
+  // days that are still technically status='scheduled' get their own
+  // filter instead of cluttering it, see the backend's display_status.
+  const [status, setStatus] = useState('scheduled')
   const [articles, setArticles] = useState([])
   const [error, setError] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [sort, onSort] = useSort('created_at')
 
   const load = () => {
     api.admin
-      .listArticles(status, page)
+      .listArticles(status, page, undefined, sort)
       .then((data) => {
         setArticles(data.articles)
         setTotalPages(data.total_pages)
@@ -197,14 +203,19 @@ export default function AdminArticles() {
       .catch((err) => setError(err.message))
   }
 
-  useEffect(load, [status, page])
+  useEffect(load, [status, page, sort])
 
   // Changing the status filter and resetting to page 1 together (rather
   // than a separate effect watching status) keeps this to one fetch --
   // React batches both state updates into a single re-render, so the
-  // [status, page] effect above only fires once with the final values.
+  // [status, page, sort] effect above only fires once with the final values.
   const changeStatus = (newStatus) => {
     setStatus(newStatus)
+    setPage(1)
+  }
+
+  const changeSort = (key) => {
+    onSort(key)
     setPage(1)
   }
 
@@ -228,6 +239,7 @@ export default function AdminArticles() {
           <option value="draft">Draft</option>
           <option value="ready">Ready</option>
           <option value="scheduled">Scheduled</option>
+          <option value="past">Past</option>
           <option value="retired">Retired</option>
         </select>
         <NewArticleForm onCreated={load} />
@@ -239,11 +251,11 @@ export default function AdminArticles() {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Status</th>
-              <th>Clues</th>
-              <th>Link cache</th>
-              <th>Scheduled</th>
+              <SortableHeader label="Title" sortKey="title" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Status" sortKey="status" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Clues" sortKey="clue_count" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Link cache" sortKey="link_cache_count" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Scheduled" sortKey="scheduled_date" sort={sort} onSort={changeSort} />
               <th />
             </tr>
           </thead>
@@ -251,7 +263,7 @@ export default function AdminArticles() {
             {articles.map((a) => (
               <tr key={a.id}>
                 <td>{a.display_title}</td>
-                <td>{a.status}</td>
+                <td>{a.display_status}</td>
                 <td>{a.clue_count}</td>
                 <td>{a.link_cache_count ?? '—'}</td>
                 <td>{a.scheduled_date || '—'}</td>

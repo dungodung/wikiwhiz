@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import Pager from './Pager'
+import SortableHeader from './SortableHeader'
+import useSort from './useSort'
 
 export default function AdminUsers() {
   const [q, setQ] = useState('')
@@ -8,10 +10,11 @@ export default function AdminUsers() {
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [sort, onSort] = useSort('username')
 
   const load = () => {
     api.admin
-      .listUsers(q, page)
+      .listUsers(q, page, sort)
       .then((data) => {
         setUsers(data.users)
         setTotalPages(data.total_pages)
@@ -22,7 +25,12 @@ export default function AdminUsers() {
   // Search is submit-triggered, not live-as-you-type -- q is deliberately
   // excluded so typing doesn't refetch on every keystroke.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(load, [page])
+  useEffect(load, [page, sort])
+
+  const changeSort = (key) => {
+    onSort(key)
+    setPage(1)
+  }
 
   const toggle = async (user) => {
     setError(null)
@@ -42,7 +50,7 @@ export default function AdminUsers() {
         onSubmit={(e) => {
           e.preventDefault()
           if (page === 1) load()
-          else setPage(1) // effect on [page] reloads with the new query
+          else setPage(1) // effect on [page, sort] reloads with the new query
         }}
       >
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search username…" />
@@ -55,9 +63,9 @@ export default function AdminUsers() {
         <table className="admin-table">
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Admin</th>
-              <th>Joined</th>
+              <SortableHeader label="Username" sortKey="username" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Admin" sortKey="is_admin" sort={sort} onSort={changeSort} />
+              <SortableHeader label="Joined" sortKey="created_at" sort={sort} onSort={changeSort} />
               <th />
             </tr>
           </thead>

@@ -70,6 +70,26 @@ def _pagination_meta(page: int, per_page: int, total: int) -> dict:
     return {"page": page, "per_page": per_page, "total": total, "total_pages": max(1, -(-total // per_page))}
 
 
+def _sort_order(columns: dict, default_key: str, default_desc: bool = False):
+    """?sort=<key>&order=<asc|desc>, validated against an allowlist (never
+    interpolated into SQL directly) so a request can't sort by an arbitrary
+    column or expression. Falls back to default_key on an unknown key, and
+    to default_desc's direction when no explicit ?order is given at all --
+    e.g. article-stats showed newest-first before sorting existed, and an
+    unadorned ?sort=<other column> shouldn't silently flip that.
+    """
+    key = request.args.get("sort", default_key)
+    if key not in columns:
+        key = default_key
+    column = columns[key]
+    order_param = request.args.get("order")
+    if order_param is None:
+        descending = default_desc
+    else:
+        descending = order_param == "desc"
+    return column.desc() if descending else column.asc()
+
+
 def _article_is_locked(article: Article) -> bool:
     """Locked once its scheduled date is today or in the past."""
     dc = article.daily_challenge
@@ -98,15 +118,24 @@ def _serialize_clue(clue: Clue) -> dict:
     }
 
 
-def _serialize_article(article: Article, include_clues: bool = False, link_cache_count: int | None = -1) -> dict:
-    # link_cache_count defaults to a sentinel (-1) meaning "not looked up by
-    # the caller yet" -- list_articles batches this across all returned
-    # articles in one query instead of one-per-row, but single-article call
-    # sites can just let this fall back to a direct per-article lookup.
+def _serialize_article(
+    article: Article,
+    include_clues: bool = False,
+    link_cache_count: int | None = -1,
+    clue_count: int | None = -1,
+) -> dict:
+    # link_cache_count/clue_count default to a sentinel (-1) meaning "not
+    # looked up by the caller yet" -- list_articles computes both in bulk
+    # (a subquery per row) instead of one query per article, but
+    # single-article call sites can just let this fall back to a direct
+    # per-article lookup.
     if link_cache_count == -1:
         meta = db.session.get(LinkCacheMeta, article.id)
         link_cache_count = meta.node_count if meta else None
+    if clue_count == -1:
+        clue_count = usable_clue_count(db.session, article.id)
     dc = article.daily_challenge
+    locked = _article_is_locked(article)
     data = {
         "id": article.id,
         "wiki_title": article.wiki_title,
@@ -115,10 +144,17 @@ def _serialize_article(article: Article, include_clues: bool = False, link_cache
         "summary_extract": article.summary_extract,
         "source_notes": article.source_notes,
         "status": article.status,
+        # A "scheduled" article whose date has already passed is shown as
+        # "past" in the admin list -- see list_articles' status filter,
+        # which distinguishes the two, even though the underlying stored
+        # status (and every other endpoint's behavior) never changes: it's
+        # still genuinely "scheduled" as far as scheduling/locking logic is
+        # concerned, just already played.
+        "display_status": "past" if (article.status == "scheduled" and locked) else article.status,
         "difficulty_tier": article.difficulty_tier,
         "scheduled_date": dc.challenge_date.isoformat() if dc else None,
-        "locked": _article_is_locked(article),
-        "clue_count": usable_clue_count(db.session, article.id),
+        "locked": locked,
+        "clue_count": clue_count,
         "link_cache_count": link_cache_count,
     }
     if include_clues:
@@ -133,6 +169,13 @@ def _serialize_article(article: Article, include_clues: bool = False, link_cache
 
 # --- Users -------------------------------------------------------------
 
+USER_SORT_COLUMNS = {
+    "username": User.wikimedia_username,
+    "is_admin": User.is_admin,
+    "created_at": User.created_at,
+}
+
+
 @admin_bp.get("/users")
 @require_admin
 def list_users():
@@ -141,7 +184,8 @@ def list_users():
     query = User.query
     if q:
         query = query.filter(User.wikimedia_username.ilike(f"%{q}%"))
-    users, total = _paginate(query.order_by(User.wikimedia_username), page, per_page)
+    order = _sort_order(USER_SORT_COLUMNS, "username")
+    users, total = _paginate(query.order_by(order), page, per_page)
     return jsonify({"users": [_serialize_user(u) for u in users], **_pagination_meta(page, per_page, total)})
 
 
@@ -173,26 +217,74 @@ def demote_user(user_id: int):
 
 # --- Articles ------------------------------------------------------------
 
+def _clue_count_subquery():
+    return (
+        db.session.query(func.count(Clue.id))
+        .filter(Clue.article_id == Article.id, Clue.is_title_leaking.is_(False))
+        .correlate(Article)
+        .scalar_subquery()
+    )
+
+
+def _link_cache_count_subquery():
+    return (
+        db.session.query(LinkCacheMeta.node_count)
+        .filter(LinkCacheMeta.answer_article_id == Article.id)
+        .correlate(Article)
+        .scalar_subquery()
+    )
+
+
 @admin_bp.get("/articles")
 @require_admin
 def list_articles():
     status = request.args.get("status")
     page, per_page = _pagination_params()
-    query = Article.query
-    if status:
-        query = query.filter_by(status=status)
-    articles, total = _paginate(query.order_by(Article.created_at), page, per_page)
-    link_cache_counts = {
-        m.answer_article_id: m.node_count
-        for m in LinkCacheMeta.query.filter(
-            LinkCacheMeta.answer_article_id.in_([a.id for a in articles])
-        ).all()
+
+    clue_count_sq = _clue_count_subquery()
+    link_cache_count_sq = _link_cache_count_subquery()
+    query = (
+        db.session.query(
+            Article,
+            clue_count_sq.label("clue_count"),
+            link_cache_count_sq.label("link_cache_count"),
+        )
+        .outerjoin(DailyChallenge, DailyChallenge.article_id == Article.id)
+    )
+
+    # "past" isn't a real status -- an article stays genuinely 'scheduled'
+    # in the DB (and to every other endpoint's locking/scheduling logic)
+    # even once its date has passed, see _serialize_article's display_status.
+    # It exists only as an admin-list filter so "Scheduled" (the default
+    # view) shows just future/unplayed days, while a played-out day that
+    # would otherwise be indistinguishable moves under its own filter
+    # instead of cluttering the default view -- "All" still shows both.
+    today = today_utc()
+    if status == "scheduled":
+        query = query.filter(Article.status == "scheduled", DailyChallenge.challenge_date > today)
+    elif status == "past":
+        query = query.filter(Article.status == "scheduled", DailyChallenge.challenge_date <= today)
+    elif status:
+        query = query.filter(Article.status == status)
+
+    sort_columns = {
+        "title": Article.display_title,
+        "status": Article.status,
+        "clue_count": clue_count_sq,
+        "link_cache_count": link_cache_count_sq,
+        "scheduled_date": DailyChallenge.challenge_date,
+        "created_at": Article.created_at,
     }
+    order = _sort_order(sort_columns, "created_at")
+    # Article.id as a tiebreaker keeps paging stable when many rows share
+    # the sorted column's value (e.g. every draft has scheduled_date=NULL).
+    rows, total = _paginate(query.order_by(order, Article.id), page, per_page)
+
     return jsonify(
         {
             "articles": [
-                _serialize_article(a, link_cache_count=link_cache_counts.get(a.id))
-                for a in articles
+                _serialize_article(article, clue_count=clue_count, link_cache_count=link_cache_count)
+                for article, clue_count, link_cache_count in rows
             ],
             **_pagination_meta(page, per_page, total),
         }
@@ -439,25 +531,36 @@ def reorder_clues(article_id: int):
 
 # --- Scheduling --------------------------------------------------------
 
+SCHEDULE_SORT_COLUMNS = {
+    "date": DailyChallenge.challenge_date,
+    "article": Article.display_title,
+}
+
+
 @admin_bp.get("/schedule")
 @require_admin
 def list_schedule():
     from_date = _parse_date(request.args.get("from", "")) or today_utc()
     page, per_page = _pagination_params()
 
-    query = DailyChallenge.query.filter(DailyChallenge.challenge_date >= from_date)
-    challenges, total = _paginate(query.order_by(DailyChallenge.challenge_date), page, per_page)
+    query = (
+        db.session.query(DailyChallenge, Article)
+        .join(Article, Article.id == DailyChallenge.article_id)
+        .filter(DailyChallenge.challenge_date >= from_date)
+    )
+    order = _sort_order(SCHEDULE_SORT_COLUMNS, "date")
+    rows, total = _paginate(query.order_by(order, DailyChallenge.challenge_date), page, per_page)
     return jsonify(
         {
             "days": [
                 {
                     "challenge_date": c.challenge_date.isoformat(),
                     "article_id": c.article_id,
-                    "wiki_title": c.article.wiki_title,
-                    "display_title": c.article.display_title,
+                    "wiki_title": a.wiki_title,
+                    "display_title": a.display_title,
                     "locked": c.challenge_date <= today_utc(),
                 }
-                for c in challenges
+                for c, a in rows
             ],
             **_pagination_meta(page, per_page, total),
         }
@@ -559,24 +662,42 @@ def article_stats():
     lost_registered = and_(GameSession.status == "lost", GameSession.user_id.isnot(None))
     page, per_page = _pagination_params()
 
+    attempted = func.count(GameSession.id)
+    won_total = func.sum(case((GameSession.status == "won", 1), else_=0))
+    won_registered_count = func.sum(case((won_registered, 1), else_=0))
+    failed_total = func.sum(case((GameSession.status == "lost", 1), else_=0))
+    failed_registered_count = func.sum(case((lost_registered, 1), else_=0))
+    avg_win_guess = func.avg(case((GameSession.status == "won", GameSession.solved_on_guess_number)))
+
     query = (
         db.session.query(
             Article.id.label("article_id"),
             Article.display_title,
             DailyChallenge.challenge_date,
-            func.count(GameSession.id).label("attempted"),
-            func.sum(case((GameSession.status == "won", 1), else_=0)).label("won_total"),
-            func.sum(case((won_registered, 1), else_=0)).label("won_registered"),
-            func.sum(case((GameSession.status == "lost", 1), else_=0)).label("failed_total"),
-            func.sum(case((lost_registered, 1), else_=0)).label("failed_registered"),
-            func.avg(case((GameSession.status == "won", GameSession.solved_on_guess_number))).label("avg_win_guess"),
+            attempted.label("attempted"),
+            won_total.label("won_total"),
+            won_registered_count.label("won_registered"),
+            failed_total.label("failed_total"),
+            failed_registered_count.label("failed_registered"),
+            avg_win_guess.label("avg_win_guess"),
         )
         .join(DailyChallenge, DailyChallenge.article_id == Article.id)
         .outerjoin(GameSession, GameSession.daily_challenge_id == DailyChallenge.id)
         .filter(DailyChallenge.challenge_date <= today_utc())
         .group_by(Article.id, Article.display_title, DailyChallenge.challenge_date)
     )
-    rows, total = _paginate(query.order_by(DailyChallenge.challenge_date.desc()), page, per_page)
+    sort_columns = {
+        "article": Article.display_title,
+        "date": DailyChallenge.challenge_date,
+        "attempted": attempted,
+        "won_total": won_total,
+        "won_registered": won_registered_count,
+        "failed_total": failed_total,
+        "failed_registered": failed_registered_count,
+        "avg_win_guess": avg_win_guess,
+    }
+    order = _sort_order(sort_columns, "date", default_desc=True)
+    rows, total = _paginate(query.order_by(order), page, per_page)
 
     return jsonify(
         {

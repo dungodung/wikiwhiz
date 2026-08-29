@@ -424,3 +424,128 @@ def test_article_stats_paginates(client, db, admin_user):
     assert len(data["articles"]) == 20
     assert data["total"] == 25
     assert data["total_pages"] == 2
+
+
+# --- "past" status filter -----------------------------------------------
+
+def _make_scheduled_article(db, *, title, pageid, challenge_date):
+    article = _make_ready_article(db, title=title, pageid=pageid)
+    db.session.add(
+        DailyChallenge(challenge_date=challenge_date, article_id=article.id, clue_order=[c.id for c in article.clues])
+    )
+    article.status = "scheduled"
+    db.session.commit()
+    return article
+
+
+def test_scheduled_filter_excludes_past_days(client, db, admin_user):
+    past = _make_scheduled_article(db, title="Past Day", pageid=800, challenge_date=date.today() - timedelta(days=1))
+    future = _make_scheduled_article(db, title="Future Day", pageid=801, challenge_date=date.today() + timedelta(days=1))
+
+    resp = client.get("/api/admin/articles?status=scheduled")
+    ids = {a["id"] for a in resp.get_json()["articles"]}
+    assert future.id in ids
+    assert past.id not in ids
+
+
+def test_past_filter_shows_only_played_out_days(client, db, admin_user):
+    past = _make_scheduled_article(db, title="Past Day 2", pageid=802, challenge_date=date.today() - timedelta(days=1))
+    future = _make_scheduled_article(db, title="Future Day 2", pageid=803, challenge_date=date.today() + timedelta(days=1))
+
+    resp = client.get("/api/admin/articles?status=past")
+    data = resp.get_json()["articles"]
+    ids = {a["id"] for a in data}
+    assert past.id in ids
+    assert future.id not in ids
+    assert next(a for a in data if a["id"] == past.id)["display_status"] == "past"
+    # The underlying stored status is untouched -- still genuinely 'scheduled'.
+    assert next(a for a in data if a["id"] == past.id)["status"] == "scheduled"
+
+
+def test_all_filter_includes_past_days(client, db, admin_user):
+    past = _make_scheduled_article(db, title="Past Day 3", pageid=804, challenge_date=date.today() - timedelta(days=1))
+
+    resp = client.get("/api/admin/articles")  # no status param == "All"
+    ids = {a["id"] for a in resp.get_json()["articles"]}
+    assert past.id in ids
+
+
+def test_future_scheduled_article_display_status_stays_scheduled(client, db, admin_user):
+    future = _make_scheduled_article(db, title="Future Day 3", pageid=805, challenge_date=date.today() + timedelta(days=1))
+
+    resp = client.get("/api/admin/articles?status=scheduled")
+    row = next(a for a in resp.get_json()["articles"] if a["id"] == future.id)
+    assert row["display_status"] == "scheduled"
+
+
+# --- sorting --------------------------------------------------------------
+
+def test_list_articles_sorts_by_title_descending(client, db, admin_user):
+    _make_ready_article(db, title="Aardvark", pageid=810)
+    _make_ready_article(db, title="Zebra", pageid=811)
+
+    resp = client.get("/api/admin/articles?sort=title&order=desc")
+    titles = [a["display_title"] for a in resp.get_json()["articles"]]
+    assert titles.index("Zebra") < titles.index("Aardvark")
+
+
+def test_list_articles_sorts_by_clue_count(client, db, admin_user):
+    _make_ready_article(db, title="Few Clues", pageid=812, n_clues=5)
+    _make_ready_article(db, title="Many Clues", pageid=813, n_clues=7)
+
+    resp = client.get("/api/admin/articles?sort=clue_count&order=desc")
+    titles = [a["display_title"] for a in resp.get_json()["articles"]]
+    assert titles.index("Many Clues") < titles.index("Few Clues")
+
+
+def test_list_articles_rejects_unknown_sort_key(client, db, admin_user):
+    _make_ready_article(db, title="Whatever", pageid=814)
+    resp = client.get("/api/admin/articles?sort=not_a_real_column")
+    assert resp.status_code == 200  # falls back to the default sort rather than erroring
+
+
+def test_list_users_sorts_by_username_descending(client, db, admin_user):
+    db.session.add(User(wikimedia_sub="z-sub", wikimedia_username="ZUser", is_admin=False))
+    db.session.commit()
+
+    resp = client.get("/api/admin/users?sort=username&order=desc")
+    usernames = [u["username"] for u in resp.get_json()["users"]]
+    assert usernames[0] == "ZUser"
+
+
+def test_list_schedule_sorts_by_article_title(client, db, admin_user):
+    _make_scheduled_article(db, title="Aardvark Day", pageid=820, challenge_date=date.today() + timedelta(days=1))
+    _make_scheduled_article(db, title="Zebra Day", pageid=821, challenge_date=date.today() + timedelta(days=2))
+
+    resp = client.get("/api/admin/schedule?sort=article&order=desc")
+    titles = [d["display_title"] for d in resp.get_json()["days"]]
+    assert titles.index("Zebra Day") < titles.index("Aardvark Day")
+
+
+def test_article_stats_default_sort_stays_newest_first(client, db, admin_user):
+    older = _make_scheduled_article(db, title="Older Stat", pageid=830, challenge_date=date.today() - timedelta(days=5))
+    newer = _make_scheduled_article(db, title="Newer Stat", pageid=831, challenge_date=date.today() - timedelta(days=1))
+
+    resp = client.get("/api/admin/article-stats")
+    ids = [a["article_id"] for a in resp.get_json()["articles"]]
+    assert ids.index(newer.id) < ids.index(older.id)
+
+
+def test_article_stats_sorts_by_attempted_ascending(client, db, admin_user, plain_user):
+    quiet = _make_scheduled_article(db, title="Quiet Day", pageid=832, challenge_date=date.today() - timedelta(days=3))
+    busy = _make_scheduled_article(db, title="Busy Day", pageid=833, challenge_date=date.today() - timedelta(days=2))
+    quiet_challenge = quiet.daily_challenge
+    busy_challenge = busy.daily_challenge
+    db.session.add(GameSession(daily_challenge_id=quiet_challenge.id, user_id=plain_user.id, status="lost"))
+    db.session.add_all(
+        [
+            GameSession(daily_challenge_id=busy_challenge.id, anon_token="a1", status="lost"),
+            GameSession(daily_challenge_id=busy_challenge.id, anon_token="a2", status="lost"),
+            GameSession(daily_challenge_id=busy_challenge.id, anon_token="a3", status="lost"),
+        ]
+    )
+    db.session.commit()
+
+    resp = client.get("/api/admin/article-stats?sort=attempted&order=asc")
+    ids = [a["article_id"] for a in resp.get_json()["articles"]]
+    assert ids.index(quiet.id) < ids.index(busy.id)

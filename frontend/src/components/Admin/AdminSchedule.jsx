@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import Pager from './Pager'
+import SortableHeader from './SortableHeader'
+import useSort from './useSort'
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
@@ -13,10 +15,11 @@ export default function AdminSchedule() {
   const [reassigning, setReassigning] = useState(null) // challenge_date currently being reassigned
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [sort, onSort] = useSort('date')
 
   const load = () => {
     api.admin
-      .listSchedule(todayIso(), page)
+      .listSchedule(todayIso(), page, sort)
       .then((data) => {
         setDays(data.days)
         setTotalPages(data.total_pages)
@@ -27,7 +30,12 @@ export default function AdminSchedule() {
     api.admin.listArticles('ready', 1, 100).then((data) => setReadyArticles(data.articles)).catch(() => {})
   }
 
-  useEffect(load, [page])
+  useEffect(load, [page, sort])
+
+  const changeSort = (key) => {
+    onSort(key)
+    setPage(1)
+  }
 
   const unschedule = async (dateStr) => {
     if (!window.confirm(`Unschedule ${dateStr}? The article reverts to 'ready'.`)) return
@@ -57,8 +65,8 @@ export default function AdminSchedule() {
       <table className="admin-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Article</th>
+            <SortableHeader label="Date" sortKey="date" sort={sort} onSort={changeSort} />
+            <SortableHeader label="Article" sortKey="article" sort={sort} onSort={changeSort} />
             <th />
           </tr>
         </thead>
