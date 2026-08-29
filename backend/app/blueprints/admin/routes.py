@@ -151,7 +151,6 @@ def _serialize_article(
         # still genuinely "scheduled" as far as scheduling/locking logic is
         # concerned, just already played.
         "display_status": "past" if (article.status == "scheduled" and locked) else article.status,
-        "difficulty_tier": article.difficulty_tier,
         "scheduled_date": dc.challenge_date.isoformat() if dc else None,
         "locked": locked,
         "clue_count": clue_count,
@@ -388,8 +387,6 @@ def update_article(article_id: int):
         article.summary_extract = payload["summary_extract"]
     if "source_notes" in payload:
         article.source_notes = payload["source_notes"]
-    if "difficulty_tier" in payload:
-        article.difficulty_tier = payload["difficulty_tier"]
     if "status" in payload:
         new_status = payload["status"]
         if new_status == "ready":

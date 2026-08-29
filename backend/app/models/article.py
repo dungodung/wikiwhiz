@@ -18,7 +18,6 @@ class Article(db.Model):
         default="draft",
         server_default="draft",
     )
-    difficulty_tier = db.Column(db.SmallInteger, nullable=True)
     source_notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(

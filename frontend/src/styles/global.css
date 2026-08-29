@@ -310,6 +310,17 @@ body {
   font-size: 0.9rem;
 }
 
+.share-button {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.8rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .game-board__result--enter {
   animation: resultPop 0.5s ease-out;
 }
@@ -390,6 +401,13 @@ body {
   letter-spacing: 0.04em;
 }
 
+.guess-panel__length-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 /* Guess history -- floats in the side margin on wide viewports (see the
    max-width: 1650px media query below for the narrow-screen fallback,
    where there's no margin to float into). The 960px below is double the
@@ -464,6 +482,23 @@ body {
 .guess-history__swatch--pending > * {
   display: inline-block;
   animation: spin 1.4s linear infinite;
+}
+
+/* "Getting warmer/colder" -- fewer degrees-of-Wikipedia than the last
+   resolved guess is warmer (closer), matching the closeness scale's own
+   warm=close/cool=far convention. */
+.guess-history__trend {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.guess-history__trend--warmer {
+  color: var(--color-success);
+}
+
+.guess-history__trend--colder {
+  color: var(--color-text-muted);
 }
 
 /* A pass has no closeness/degrees to show -- a plain muted dash instead of

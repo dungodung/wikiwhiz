@@ -5,6 +5,7 @@ import TileBoard from './TileBoard'
 import ClueFeed from './ClueFeed'
 import GuessPanel from './GuessPanel'
 import GuessHistory from './GuessHistory'
+import ShareButton from './ShareButton'
 import { wikipediaUrl } from '../../lib/wikipedia'
 
 const DEGREES_POLL_INTERVAL_MS = 3000
@@ -55,7 +56,7 @@ export default function GameBoard() {
               <a href={wikipediaUrl(state.solved_answer_title)} target="_blank" rel="noopener noreferrer">
                 <strong>{state.solved_answer_title}</strong>
               </a>
-              .
+              . <ShareButton state={state} />
             </p>
           ) : (
             <p>

@@ -7,6 +7,24 @@ import DegreesBadge from './DegreesBadge'
 const TOOLTIP_GAP = 10
 const NARROW_BREAKPOINT = 1100
 
+// Compares a guess's degrees-of-Wikipedia value against the most recent
+// *earlier* guess that also has one (skipping passes and unresolved/pending
+// guesses in between) -- fewer degrees means closer to the answer, so a
+// decrease reads as "warmer". Returns null when there's nothing comparable
+// yet (first resolved guess, or this guess itself has no degrees value).
+function degreesTrend(guesses, index) {
+  const current = guesses[index]
+  if (current.is_pass || current.degrees_value == null) return null
+  for (let i = index - 1; i >= 0; i--) {
+    const prev = guesses[i]
+    if (prev.is_pass || prev.degrees_value == null) continue
+    if (current.degrees_value < prev.degrees_value) return 'warmer'
+    if (current.degrees_value > prev.degrees_value) return 'colder'
+    return 'same'
+  }
+  return null
+}
+
 // A compact record of past guesses, floated beside the board -- stands in
 // for a Wordle-style grid of predetermined rows (which would take a lot of
 // vertical space here) while still giving a sense of how many attempts have
@@ -55,7 +73,7 @@ export default function GuessHistory({ guesses, totalClues }) {
         Guess {guesses.length} of {totalClues}
       </h3>
       <ul className="guess-history__list">
-        {guesses.map((g) =>
+        {guesses.map((g, i) =>
           g.is_pass ? (
             <li key={g.attempt_number} className="guess-history__item">
               <span className="guess-history__number">{g.attempt_number}</span>
@@ -92,6 +110,19 @@ export default function GuessHistory({ guesses, totalClues }) {
                   g.degrees_value
                 )}
               </span>
+              {(() => {
+                const trend = degreesTrend(guesses, i)
+                if (!trend || trend === 'same') return null
+                return (
+                  <span
+                    className={`guess-history__trend guess-history__trend--${trend}`}
+                    title={trend === 'warmer' ? 'Closer than your last guess' : 'Farther than your last guess'}
+                    aria-label={trend === 'warmer' ? 'Getting warmer' : 'Getting colder'}
+                  >
+                    {trend === 'warmer' ? '▲' : '▼'}
+                  </span>
+                )
+              })()}
               {g.resolved_title ? (
                 <a
                   className="guess-history__text"

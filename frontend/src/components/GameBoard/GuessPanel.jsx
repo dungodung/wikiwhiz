@@ -173,6 +173,8 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
         </button>
       </div>
 
+      {hintMode && <p className="guess-panel__length-hint">Answer is {slotPattern.length} letters.</p>}
+
       <TileBoard ref={tileBoardRef} slotPattern={slotPattern} letters={letters} onLetterChange={setLetter} />
 
       <div className="guess-panel__actions">

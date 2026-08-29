@@ -62,7 +62,7 @@ def main() -> int:
         for stmt in _insert_statements(
             "articles",
             ["id", "wiki_title", "wiki_pageid", "display_title", "slot_pattern",
-             "summary_extract", "status", "difficulty_tier", "source_notes",
+             "summary_extract", "status", "source_notes",
              "created_at", "updated_at"],
             [
                 {
@@ -70,7 +70,7 @@ def main() -> int:
                     "display_title": a.display_title,
                     "slot_pattern": json.dumps(a.slot_pattern),
                     "summary_extract": a.summary_extract, "status": a.status,
-                    "difficulty_tier": a.difficulty_tier, "source_notes": a.source_notes,
+                    "source_notes": a.source_notes,
                     "created_at": a.created_at, "updated_at": a.updated_at,
                 }
                 for a in articles

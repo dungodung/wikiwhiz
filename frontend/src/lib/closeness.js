@@ -10,7 +10,13 @@ export function bucketColor(bucket) {
   return `hsl(${hue}, 75%, 50%)`
 }
 
+// Shared by temperatureLabel below and lib/share.js's emoji-per-guess
+// mapping, so the two stay in lockstep with the same 7-tier scale rather
+// than each hand-rolling their own bucket math.
+export function temperatureIndex(bucket) {
+  return Math.min(TEMPERATURES.length - 1, Math.floor((bucket / NUM_BUCKETS) * TEMPERATURES.length))
+}
+
 export function temperatureLabel(bucket) {
-  const index = Math.min(TEMPERATURES.length - 1, Math.floor((bucket / NUM_BUCKETS) * TEMPERATURES.length))
-  return TEMPERATURES[index]
+  return TEMPERATURES[temperatureIndex(bucket)]
 }
