@@ -184,7 +184,14 @@ def _live_bidirectional_bfs(
             hit_pid = client.titles_to_pageids([hit_title]).get(hit_title)
             if hit_pid is not None:
                 visited_this[hit_pid] = this_depth
-                return this_depth + titles_other[hit_title], visited_a, visited_b
+                total = this_depth + titles_other[hit_title]
+                # The guessed article's own pageid, not just whichever
+                # intermediate node happened to complete the connection --
+                # see the note on _opportunistically_cache below for why
+                # this matters even though visited_this already has an
+                # entry for *something*.
+                visited_a[goal_pageid] = total
+                return total, visited_a, visited_b
 
         # No shortcut -- resolve everything to keep expanding. An earlier
         # version silently took only the first 50 titles total per node and
@@ -207,6 +214,7 @@ def _live_bidirectional_bfs(
                 found_total = this_depth + visited_other[neighbor_pid]
 
         if found_total is not None:
+            visited_a[goal_pageid] = found_total
             return found_total, visited_a, visited_b
 
         if expand_a:
@@ -220,13 +228,25 @@ def _live_bidirectional_bfs(
 
 
 def _opportunistically_cache(
-    answer_article: Article, visited_from_answer: dict[int, int], client: MediaWikiClient
+    answer_article: Article,
+    visited_from_answer: dict[int, int],
+    client: MediaWikiClient,
+    priority_pageid: int | None = None,
 ) -> None:
     """Writes newly-discovered nodes back to LinkCacheNode, same-shape filter
     and node_tiles included -- mirrors scripts/precompute_link_cache.py so a
     node written here is indistinguishable from one the precompute found.
+
+    priority_pageid (the guessed article's own pageid, when called from
+    compute_degrees_live) is guaranteed a slot even if visited_from_answer
+    is large enough that MAX_OPPORTUNISTIC_CACHE_WRITES would otherwise
+    truncate it away -- that's the one entry a repeat guess of the exact
+    same wrong answer actually needs cached; the rest is best-effort.
     """
-    items = list(visited_from_answer.items())[:MAX_OPPORTUNISTIC_CACHE_WRITES]
+    items = list(visited_from_answer.items())
+    if priority_pageid is not None and priority_pageid in visited_from_answer:
+        items.sort(key=lambda pair: pair[0] != priority_pageid)
+    items = items[:MAX_OPPORTUNISTIC_CACHE_WRITES]
     if not items:
         return
     answer_tile_count = len(normalize_to_tiles(answer_article.display_title))
@@ -300,7 +320,7 @@ def compute_degrees_live(
             return DegreesResult(degrees=None, capped=True)
 
         try:
-            _opportunistically_cache(answer_article, visited_a, active_client)
+            _opportunistically_cache(answer_article, visited_a, active_client, priority_pageid=guess_pageid)
         except (requests.RequestException, pymysql.MySQLError):
             logger.warning(
                 "Opportunistic link-cache write failed for answer_article_id=%s", answer_article.id, exc_info=True

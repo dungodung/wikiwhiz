@@ -192,6 +192,70 @@ def test_compute_degrees_live_finds_a_two_hop_connection_via_title_shortcut(app,
         assert client.pageids_to_titles.call_count == 1
 
 
+def test_compute_degrees_live_caches_the_guessed_article_itself(app, db):
+    """Regression test: when the *goal* side's own expansion completes the
+    connection (the common case once the answer's frontier outgrows the
+    guess's -- see "expand the smaller frontier" above), only the
+    intermediate shortcut node (e.g. "Shared Node" below) ever landed in
+    visited_a, which is the only dict _opportunistically_cache writes from.
+    The guessed article's own pageid was never added to visited_a in that
+    path, so it never got a LinkCacheNode row -- meaning a *second* guess of
+    the exact same wrong-but-real answer (even by a different player, same
+    puzzle) still missed the cache and re-paid the full live BFS, even
+    though the first guess had already discovered its degree. Confirmed
+    live: reported as "Aristotle, 2 degrees, cache should've had it from an
+    earlier guess today" still spinning on a repeat guess.
+    """
+    with app.app_context():
+        # A dedicated same-shape (9-letter, no spaces) pair rather than
+        # _make_article's 15-letter "Albert Einstein" -- _opportunistically_
+        # cache only writes nodes matching the *answer's* own tile count,
+        # and "Aristotle" (9 letters) needs an answer of that same shape to
+        # actually get persisted, mirroring the real same-shape guess rule.
+        article = Article(
+            wiki_title="Democracy",
+            wiki_pageid=800,
+            display_title="Democracy",
+            slot_pattern="L" * 9,
+            status="ready",
+        )
+        db.session.add(article)
+        db.session.flush()
+        db.session.commit()
+
+        title_by_pid = {501: "Node A", 502: "Node B", 503: "Node C", 504: "Node D", 505: "Shared Node"}
+        pid_by_title = {v: k for k, v in title_by_pid.items()}
+        # The guessed article itself (999, "Aristotle") only ever appears in
+        # visited_b pre-seeded at depth 0 -- it's never one of side A's
+        # resolved neighbors here, so pageids_to_titles must be able to
+        # resolve it too, same as any other real article would.
+        all_titles_by_pid = {**title_by_pid, 999: "Aristotle"}
+
+        client = MagicMock()
+        client.links_batch.side_effect = lambda pageids, **kwargs: (
+            {article.wiki_pageid: set(title_by_pid.values())} if article.wiki_pageid in pageids else {999: {"Shared Node"}}
+        )
+        client.linkshere_batch.return_value = {}
+        client.titles_to_pageids.return_value = pid_by_title
+        client.pageids_to_titles.return_value = all_titles_by_pid
+
+        result = compute_degrees_live(client, article, 999, depth_cap=6, node_cap=1000, timeout_sec=4)
+
+        assert result.degrees == 2
+
+        guessed_node = LinkCacheNode.query.filter_by(answer_article_id=article.id, node_pageid=999).first()
+        assert guessed_node is not None
+        assert guessed_node.degree == 2
+        assert guessed_node.node_title == "Aristotle"
+
+        # A later guess of the exact same title must now hit the cache
+        # directly, no live BFS involved.
+        repeat = resolve_and_score_guess(article.id, "Aristotle")
+        assert repeat is not None
+        assert repeat.pageid == 999
+        assert repeat.degrees_result.degrees == 2
+
+
 def test_compute_degrees_live_prefers_a_reachable_replica_over_the_api(app, db):
     """When wiki_replica.get_client() returns a usable client, the BFS must
     run against it instead of the MediaWiki API client -- the API client is
