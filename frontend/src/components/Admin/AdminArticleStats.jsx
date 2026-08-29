@@ -40,22 +40,42 @@ export default function AdminArticleStats() {
 
       {!loading && !error && (
         <div className="admin-table-wrap">
-          <table className="admin-table">
+          <table className="admin-table admin-table--compact">
             <thead>
               <tr>
                 <SortableHeader label="Article" sortKey="article" sort={sort} onSort={changeSort} />
                 <SortableHeader label="Date" sortKey="date" sort={sort} onSort={changeSort} />
                 <SortableHeader label="Attempted" sortKey="attempted" sort={sort} onSort={changeSort} />
-                <SortableHeader label="Won (total)" sortKey="won_total" sort={sort} onSort={changeSort} />
-                <SortableHeader label="Won (registered)" sortKey="won_registered" sort={sort} onSort={changeSort} />
-                <SortableHeader label="Failed (total)" sortKey="failed_total" sort={sort} onSort={changeSort} />
                 <SortableHeader
-                  label="Failed (registered)"
+                  label={<>Won<br />(total)</>}
+                  sortKey="won_total"
+                  sort={sort}
+                  onSort={changeSort}
+                />
+                <SortableHeader
+                  label={<>Won<br />(registered)</>}
+                  sortKey="won_registered"
+                  sort={sort}
+                  onSort={changeSort}
+                />
+                <SortableHeader
+                  label={<>Failed<br />(total)</>}
+                  sortKey="failed_total"
+                  sort={sort}
+                  onSort={changeSort}
+                />
+                <SortableHeader
+                  label={<>Failed<br />(registered)</>}
                   sortKey="failed_registered"
                   sort={sort}
                   onSort={changeSort}
                 />
-                <SortableHeader label="Avg. guess to win" sortKey="avg_win_guess" sort={sort} onSort={changeSort} />
+                <SortableHeader
+                  label={<>Avg. guess<br />to win</>}
+                  sortKey="avg_win_guess"
+                  sort={sort}
+                  onSort={changeSort}
+                />
               </tr>
             </thead>
             <tbody>

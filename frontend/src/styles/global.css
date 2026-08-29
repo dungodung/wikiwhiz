@@ -918,6 +918,18 @@ a.guess-history__text:hover {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Article Stats has 8 columns -- several with two-line headers already
+   (see SortableHeader usage in AdminArticleStats.jsx) -- tighter padding
+   than the other admin tables buys back just enough width to avoid a
+   horizontal scrollbar on a typical viewport. */
+.admin-table--compact td {
+  padding: 0.4rem 0.4rem;
+}
+
+.admin-table--compact .admin-table__sort-btn {
+  padding: 0.4rem 0.4rem;
+}
+
 .admin-table th {
   padding: 0;
 }
