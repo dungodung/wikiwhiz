@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import Pager from './Pager'
 
 export default function AdminUsers() {
   const [q, setQ] = useState('')
   const [users, setUsers] = useState([])
   const [error, setError] = useState(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   const load = () => {
-    api.admin.listUsers(q).then((data) => setUsers(data.users)).catch((err) => setError(err.message))
+    api.admin
+      .listUsers(q, page)
+      .then((data) => {
+        setUsers(data.users)
+        setTotalPages(data.total_pages)
+      })
+      .catch((err) => setError(err.message))
   }
 
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Search is submit-triggered, not live-as-you-type -- q is deliberately
+  // excluded so typing doesn't refetch on every keystroke.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [page])
 
   const toggle = async (user) => {
     setError(null)
@@ -32,7 +41,8 @@ export default function AdminUsers() {
         className="admin-panel__search"
         onSubmit={(e) => {
           e.preventDefault()
-          load()
+          if (page === 1) load()
+          else setPage(1) // effect on [page] reloads with the new query
         }}
       >
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search username…" />
@@ -67,6 +77,7 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+      <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   )
 }

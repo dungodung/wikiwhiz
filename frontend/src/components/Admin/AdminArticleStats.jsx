@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import Pager from './Pager'
 
 export default function AdminArticleStats() {
   const [rows, setRows] = useState([])
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   useEffect(() => {
     api.admin
-      .articleStats()
-      .then((data) => setRows(data.articles))
+      .articleStats(page)
+      .then((data) => {
+        setRows(data.articles)
+        setTotalPages(data.total_pages)
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [page])
 
   return (
     <div className="admin-panel">
@@ -56,6 +62,7 @@ export default function AdminArticleStats() {
           </table>
         </div>
       )}
+      {!loading && !error && <Pager page={page} totalPages={totalPages} onChange={setPage} />}
     </div>
   )
 }

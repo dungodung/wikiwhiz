@@ -343,3 +343,84 @@ def test_article_stats_aggregates_sessions_correctly(client, db, admin_user, pla
     assert row["failed_total"] == 1
     assert row["failed_registered"] == 0
     assert row["avg_win_guess"] == 4.0  # (2 + 4 + 6) / 3
+
+
+# --- pagination --------------------------------------------------------
+
+def test_list_users_paginates_default_20_per_page(client, db, admin_user):
+    for i in range(24):  # + admin_user itself = 25 total
+        db.session.add(User(wikimedia_sub=f"sub-{i}", wikimedia_username=f"User{i:02d}", is_admin=False))
+    db.session.commit()
+
+    resp = client.get("/api/admin/users")
+    data = resp.get_json()
+    assert len(data["users"]) == 20
+    assert data["page"] == 1
+    assert data["per_page"] == 20
+    assert data["total"] == 25
+    assert data["total_pages"] == 2
+
+    resp = client.get("/api/admin/users?page=2")
+    data = resp.get_json()
+    assert len(data["users"]) == 5
+    assert data["page"] == 2
+
+
+def test_list_articles_paginates_and_respects_per_page_override(client, db, admin_user):
+    for i in range(25):
+        _make_ready_article(db, title=f"Paged Article {i}", pageid=500 + i)
+
+    resp = client.get("/api/admin/articles")
+    data = resp.get_json()
+    assert len(data["articles"]) == 20
+    assert data["total"] == 25
+    assert data["total_pages"] == 2
+
+    resp = client.get("/api/admin/articles?per_page=10&page=3")
+    data = resp.get_json()
+    assert len(data["articles"]) == 5  # 25 total: page 3 of size 10 -> last 5
+    assert data["page"] == 3
+    assert data["per_page"] == 10
+
+
+def test_list_schedule_paginates(client, db, admin_user):
+    for i in range(25):
+        article = _make_ready_article(db, title=f"Scheduled {i}", pageid=600 + i)
+        db.session.add(
+            DailyChallenge(
+                challenge_date=date.today() + timedelta(days=i + 1),
+                article_id=article.id,
+                clue_order=[c.id for c in article.clues],
+            )
+        )
+    db.session.commit()
+
+    resp = client.get("/api/admin/schedule")
+    data = resp.get_json()
+    assert len(data["days"]) == 20
+    assert data["total"] == 25
+    # Ascending by date -- the first page holds the nearest (soonest) days.
+    assert data["days"][0]["challenge_date"] == (date.today() + timedelta(days=1)).isoformat()
+
+    resp = client.get("/api/admin/schedule?page=2")
+    data = resp.get_json()
+    assert len(data["days"]) == 5
+
+
+def test_article_stats_paginates(client, db, admin_user):
+    for i in range(25):
+        article = _make_ready_article(db, title=f"Stats {i}", pageid=700 + i)
+        db.session.add(
+            DailyChallenge(
+                challenge_date=date.today() - timedelta(days=i + 1),
+                article_id=article.id,
+                clue_order=[c.id for c in article.clues],
+            )
+        )
+    db.session.commit()
+
+    resp = client.get("/api/admin/article-stats")
+    data = resp.get_json()
+    assert len(data["articles"]) == 20
+    assert data["total"] == 25
+    assert data["total_pages"] == 2

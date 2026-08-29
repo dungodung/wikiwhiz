@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import ArticleDetail from './ArticleDetail'
+import Pager from './Pager'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 250
 
@@ -183,12 +184,29 @@ export default function AdminArticles() {
   const [articles, setArticles] = useState([])
   const [error, setError] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   const load = () => {
-    api.admin.listArticles(status).then((data) => setArticles(data.articles)).catch((err) => setError(err.message))
+    api.admin
+      .listArticles(status, page)
+      .then((data) => {
+        setArticles(data.articles)
+        setTotalPages(data.total_pages)
+      })
+      .catch((err) => setError(err.message))
   }
 
-  useEffect(load, [status])
+  useEffect(load, [status, page])
+
+  // Changing the status filter and resetting to page 1 together (rather
+  // than a separate effect watching status) keeps this to one fetch --
+  // React batches both state updates into a single re-render, so the
+  // [status, page] effect above only fires once with the final values.
+  const changeStatus = (newStatus) => {
+    setStatus(newStatus)
+    setPage(1)
+  }
 
   if (selectedId) {
     return (
@@ -205,7 +223,7 @@ export default function AdminArticles() {
   return (
     <div className="admin-panel">
       <div className="admin-panel__filters">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select value={status} onChange={(e) => changeStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
           <option value="ready">Ready</option>
@@ -245,6 +263,7 @@ export default function AdminArticles() {
           </tbody>
         </table>
       </div>
+      <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   )
 }

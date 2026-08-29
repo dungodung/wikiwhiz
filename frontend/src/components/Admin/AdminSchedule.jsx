@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import Pager from './Pager'
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
-}
-
-function addDaysIso(iso, days) {
-  const d = new Date(`${iso}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
 }
 
 export default function AdminSchedule() {
@@ -16,15 +11,23 @@ export default function AdminSchedule() {
   const [readyArticles, setReadyArticles] = useState([])
   const [error, setError] = useState(null)
   const [reassigning, setReassigning] = useState(null) // challenge_date currently being reassigned
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   const load = () => {
-    const from = todayIso()
-    const to = addDaysIso(from, 30)
-    api.admin.listSchedule(from, to).then((data) => setDays(data.days)).catch((err) => setError(err.message))
-    api.admin.listArticles('ready').then((data) => setReadyArticles(data.articles)).catch(() => {})
+    api.admin
+      .listSchedule(todayIso(), page)
+      .then((data) => {
+        setDays(data.days)
+        setTotalPages(data.total_pages)
+      })
+      .catch((err) => setError(err.message))
+    // The reassign dropdown needs every ready article, not just one page of
+    // them -- MAX_PER_PAGE (100) rather than the default 20.
+    api.admin.listArticles('ready', 1, 100).then((data) => setReadyArticles(data.articles)).catch(() => {})
   }
 
-  useEffect(load, [])
+  useEffect(load, [page])
 
   const unschedule = async (dateStr) => {
     if (!window.confirm(`Unschedule ${dateStr}? The article reverts to 'ready'.`)) return
@@ -48,7 +51,7 @@ export default function AdminSchedule() {
 
   return (
     <div className="admin-panel">
-      <p>Next 30 days. Today and past days are locked and cannot be changed here.</p>
+      <p>Upcoming scheduled days. Today and past days are locked and cannot be changed here.</p>
       {error && <p className="game-board__status game-board__status--error">{error}</p>}
       <div className="admin-table-wrap">
       <table className="admin-table">
@@ -91,6 +94,7 @@ export default function AdminSchedule() {
         </tbody>
       </table>
       </div>
+      <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   )
 }

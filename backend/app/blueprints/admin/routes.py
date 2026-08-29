@@ -8,7 +8,6 @@ content are held to identical rules.
 """
 
 from datetime import date as date_cls
-from datetime import timedelta
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import and_, case, func
@@ -39,6 +38,36 @@ def _parse_date(date_str: str) -> date_cls | None:
         return date_cls.fromisoformat(date_str)
     except (ValueError, TypeError):
         return None
+
+
+DEFAULT_PER_PAGE = 20
+MAX_PER_PAGE = 100
+
+
+def _pagination_params() -> tuple[int, int]:
+    """page is 1-indexed; per_page defaults to 20 and is capped at 100 so a
+    malicious/mistaken ?per_page=999999 can't force one huge query.
+    """
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(request.args.get("per_page", DEFAULT_PER_PAGE))
+    except (TypeError, ValueError):
+        per_page = DEFAULT_PER_PAGE
+    per_page = max(1, min(per_page, MAX_PER_PAGE))
+    return page, per_page
+
+
+def _paginate(query, page: int, per_page: int) -> tuple[list, int]:
+    total = query.order_by(None).count()  # order_by(None) -- ORDER BY is irrelevant to a COUNT and can slow it down
+    items = query.offset((page - 1) * per_page).limit(per_page).all()
+    return items, total
+
+
+def _pagination_meta(page: int, per_page: int, total: int) -> dict:
+    return {"page": page, "per_page": per_page, "total": total, "total_pages": max(1, -(-total // per_page))}
 
 
 def _article_is_locked(article: Article) -> bool:
@@ -108,11 +137,12 @@ def _serialize_article(article: Article, include_clues: bool = False, link_cache
 @require_admin
 def list_users():
     q = request.args.get("q", "").strip()
+    page, per_page = _pagination_params()
     query = User.query
     if q:
         query = query.filter(User.wikimedia_username.ilike(f"%{q}%"))
-    users = query.order_by(User.wikimedia_username).limit(50).all()
-    return jsonify({"users": [_serialize_user(u) for u in users]})
+    users, total = _paginate(query.order_by(User.wikimedia_username), page, per_page)
+    return jsonify({"users": [_serialize_user(u) for u in users], **_pagination_meta(page, per_page, total)})
 
 
 @admin_bp.post("/users/<int:user_id>/promote")
@@ -147,10 +177,11 @@ def demote_user(user_id: int):
 @require_admin
 def list_articles():
     status = request.args.get("status")
+    page, per_page = _pagination_params()
     query = Article.query
     if status:
         query = query.filter_by(status=status)
-    articles = query.order_by(Article.created_at).limit(200).all()
+    articles, total = _paginate(query.order_by(Article.created_at), page, per_page)
     link_cache_counts = {
         m.answer_article_id: m.node_count
         for m in LinkCacheMeta.query.filter(
@@ -162,7 +193,8 @@ def list_articles():
             "articles": [
                 _serialize_article(a, link_cache_count=link_cache_counts.get(a.id))
                 for a in articles
-            ]
+            ],
+            **_pagination_meta(page, per_page, total),
         }
     )
 
@@ -411,17 +443,10 @@ def reorder_clues(article_id: int):
 @require_admin
 def list_schedule():
     from_date = _parse_date(request.args.get("from", "")) or today_utc()
-    to_date = _parse_date(request.args.get("to", ""))
-    if to_date is None:
-        to_date = from_date + timedelta(days=30)
+    page, per_page = _pagination_params()
 
-    challenges = (
-        DailyChallenge.query.filter(
-            DailyChallenge.challenge_date >= from_date, DailyChallenge.challenge_date <= to_date
-        )
-        .order_by(DailyChallenge.challenge_date)
-        .all()
-    )
+    query = DailyChallenge.query.filter(DailyChallenge.challenge_date >= from_date)
+    challenges, total = _paginate(query.order_by(DailyChallenge.challenge_date), page, per_page)
     return jsonify(
         {
             "days": [
@@ -433,7 +458,8 @@ def list_schedule():
                     "locked": c.challenge_date <= today_utc(),
                 }
                 for c in challenges
-            ]
+            ],
+            **_pagination_meta(page, per_page, total),
         }
     )
 
@@ -531,8 +557,9 @@ def article_stats():
     """
     won_registered = and_(GameSession.status == "won", GameSession.user_id.isnot(None))
     lost_registered = and_(GameSession.status == "lost", GameSession.user_id.isnot(None))
+    page, per_page = _pagination_params()
 
-    rows = (
+    query = (
         db.session.query(
             Article.id.label("article_id"),
             Article.display_title,
@@ -548,9 +575,8 @@ def article_stats():
         .outerjoin(GameSession, GameSession.daily_challenge_id == DailyChallenge.id)
         .filter(DailyChallenge.challenge_date <= today_utc())
         .group_by(Article.id, Article.display_title, DailyChallenge.challenge_date)
-        .order_by(DailyChallenge.challenge_date.desc())
-        .all()
     )
+    rows, total = _paginate(query.order_by(DailyChallenge.challenge_date.desc()), page, per_page)
 
     return jsonify(
         {
@@ -567,6 +593,7 @@ def article_stats():
                     "avg_win_guess": round(float(r.avg_win_guess), 2) if r.avg_win_guess is not None else None,
                 }
                 for r in rows
-            ]
+            ],
+            **_pagination_meta(page, per_page, total),
         }
     )

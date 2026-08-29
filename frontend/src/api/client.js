@@ -34,16 +34,19 @@ export const api = {
   myStats: () => request('/stats/me'),
 
   admin: {
-    listUsers: (q = '') => request(`/admin/users?q=${encodeURIComponent(q)}`),
+    listUsers: (q = '', page = 1) => request(`/admin/users?q=${encodeURIComponent(q)}&page=${page}`),
     promoteUser: (id) => request(`/admin/users/${id}/promote`, { method: 'POST' }),
     demoteUser: (id) => request(`/admin/users/${id}/demote`, { method: 'POST' }),
 
     searchArticleTitles: (q) => request(`/admin/article-lookup/search?q=${encodeURIComponent(q)}`),
     resolveArticleLookup: (title) => request(`/admin/article-lookup/resolve?title=${encodeURIComponent(title)}`),
 
-    articleStats: () => request('/admin/article-stats'),
+    articleStats: (page = 1) => request(`/admin/article-stats?page=${page}`),
 
-    listArticles: (status = '') => request(`/admin/articles${status ? `?status=${status}` : ''}`),
+    listArticles: (status = '', page = 1, perPage) =>
+      request(
+        `/admin/articles?page=${page}${perPage ? `&per_page=${perPage}` : ''}${status ? `&status=${status}` : ''}`
+      ),
     getArticle: (id) => request(`/admin/articles/${id}`),
     createArticle: (body) => request('/admin/articles', { method: 'POST', body: JSON.stringify(body) }),
     updateArticle: (id, body) => request(`/admin/articles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -60,7 +63,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(dateStr ? { date: dateStr } : {}),
       }),
-    listSchedule: (from, to) => request(`/admin/schedule?from=${from}&to=${to}`),
+    listSchedule: (from, page = 1) => request(`/admin/schedule?from=${from}&page=${page}`),
     assignSchedule: (dateStr, articleId) =>
       request(`/admin/schedule/${dateStr}/assign`, { method: 'POST', body: JSON.stringify({ article_id: articleId }) }),
     unschedule: (dateStr) => request(`/admin/schedule/${dateStr}`, { method: 'DELETE' }),
