@@ -343,11 +343,15 @@ body {
 
 .guess-panel__actions {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
-  justify-content: center;
 }
 
 .guess-panel__submit {
+  /* Pushes Guess to the row's far right (commit-button convention) --
+     Pass/Clear pack to the left, and the auto margin eats all remaining
+     row width as the separator instead of a fixed gap. */
+  margin-left: auto;
   background: var(--color-accent);
   color: var(--color-accent-text);
   border: none;
@@ -693,15 +697,86 @@ a.guess-history__text:hover {
 }
 
 /* Hint mode */
-.hint-panel__toggle {
-  align-self: flex-start;
-  background: none;
+/* A persistent, viewport-fixed control rather than scoped to the guess
+   panel -- reachable regardless of scroll position while a puzzle is in
+   progress. `top: 5rem` clears the ~4rem-tall header (plain document
+   flow, not sticky -- see Header.jsx) with headroom to spare. The whole
+   toggle is kept to a single compact row so its bottom edge stays above
+   .guess-history's own `top: 7rem` fixed sidebar -- the two can be
+   on-screen at once during active play (GuessHistory renders as soon as
+   there's one guess, GuessPanel stays mounted until the puzzle ends), so
+   this must never grow tall enough to overlap it regardless of viewport
+   width. Folds back into normal document flow below 720px (matching
+   .app__main's own max-width -- see the media query near the bottom of
+   this file), since there's no side margin left to float into there
+   either. */
+.hint-toggle {
+  position: fixed;
+  top: 5rem;
+  right: 1.5rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
   border-radius: var(--radius);
-  padding: 0.4rem 0.8rem;
+  padding: 0.4rem 0.7rem;
+}
+
+.hint-toggle__label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.hint-toggle__switch {
+  background: none;
+  border: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
-  font-size: 0.85rem;
+  border-radius: 999px;
+}
+
+.hint-toggle__switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.hint-toggle__track {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.hint-toggle__switch:hover .hint-toggle__track {
+  border-color: var(--color-text-muted);
+}
+
+.hint-toggle__switch[aria-checked='true'] .hint-toggle__track {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.hint-toggle__knob {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--color-text);
+  transition: transform 0.15s ease;
+}
+
+.hint-toggle__switch[aria-checked='true'] .hint-toggle__knob {
+  transform: translateX(1rem);
 }
 
 .hint-panel {
@@ -1131,6 +1206,17 @@ a.guess-history__text:hover {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+@media (max-width: 720px) {
+  /* No side margin to float into at this width either (matches
+     .app__main's own max-width) -- fold back into normal flow, right at
+     the top of the guess panel where it already sits in the JSX. */
+  .hint-toggle {
+    position: static;
+    align-self: flex-start;
+    margin-bottom: 0.25rem;
+  }
 }
 
 @media (max-width: 1650px) {

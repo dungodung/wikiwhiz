@@ -4,6 +4,28 @@ import { useAuthStore } from '../../state/authStore'
 import TileBoard from './TileBoard'
 
 const PLACEHOLDER = '_'
+const HINT_MODE_STORAGE_KEY = 'wikiwhiz:hintModePreference'
+
+// Logged-in players' hint-mode preference lives server-side (see authStore);
+// anonymous play has no account to attach it to, so it's kept in
+// localStorage instead -- wrapped in try/catch since localStorage can throw
+// (private browsing, blocked storage) rather than just being absent.
+function readStoredHintMode() {
+  try {
+    return localStorage.getItem(HINT_MODE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeStoredHintMode(enabled) {
+  try {
+    localStorage.setItem(HINT_MODE_STORAGE_KEY, enabled ? '1' : '0')
+  } catch {
+    // Preference just won't persist -- same as before this existed.
+  }
+}
+
 // Below this many known characters, the search recall (CirrusSearch, capped
 // at 50 candidates server-side) is too weak a sample to say "no matches"
 // with any confidence -- plenty of real articles could still fit, we just
@@ -24,15 +46,17 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
   const authenticated = useAuthStore((s) => s.authenticated)
   const hintModePreference = useAuthStore((s) => s.hintModePreference)
   const setHintModePreference = useAuthStore((s) => s.setHintModePreference)
-  // Seeded from the logged-in player's saved preference at mount time --
-  // GuessPanel remounts per puzzle (see the component comment above), so
-  // this naturally re-applies on every new puzzle without extra wiring.
-  // Anonymous play has nowhere to persist a preference, so it always
-  // starts off, same as before this feature existed.
-  const [hintMode, setHintModeState] = useState(() => (authenticated ? hintModePreference : false))
+  // Seeded from the logged-in player's saved preference (server-side) or,
+  // for anonymous play, localStorage -- GuessPanel remounts per puzzle (see
+  // the component comment above), so this naturally re-applies on every new
+  // puzzle without extra wiring either way.
+  const [hintMode, setHintModeState] = useState(() =>
+    authenticated ? hintModePreference : readStoredHintMode()
+  )
   const setHintMode = (next) => {
     setHintModeState(next)
     if (authenticated) setHintModePreference(next)
+    else writeStoredHintMode(next)
   }
   const [suggestions, setSuggestions] = useState(null)
   const [hintLoading, setHintLoading] = useState(false)
@@ -126,20 +150,32 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
         Guess {guessCount + 1} of {totalClues}
       </p>
 
+      {/* position: fixed (see global.css) -- lives here in the DOM only so
+          it can read/toggle hintMode directly; visually it's pinned to the
+          viewport corner, not scoped to this block. Folds back into normal
+          flow (right where it sits here, above the tiles) below 720px. */}
+      <div className="hint-toggle">
+        <span className="hint-toggle__label" id="hint-toggle-label">
+          Hint mode
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={hintMode}
+          aria-labelledby="hint-toggle-label"
+          className="hint-toggle__switch"
+          onClick={() => setHintMode(!hintMode)}
+          title="Fill in any letters (or spaces, dashes, commas, parentheses) you're confident about — leave the rest blank. Matches update as you type."
+        >
+          <span className="hint-toggle__track">
+            <span className="hint-toggle__knob" />
+          </span>
+        </button>
+      </div>
+
       <TileBoard ref={tileBoardRef} slotPattern={slotPattern} letters={letters} onLetterChange={setLetter} />
 
       <div className="guess-panel__actions">
-        <button
-          type="button"
-          className="guess-panel__submit"
-          onClick={handleSubmit}
-          disabled={!isComplete || disabled}
-        >
-          Guess
-        </button>
-        <button type="button" className="guess-panel__clear" onClick={clearLetters} disabled={disabled}>
-          Clear
-        </button>
         <button
           type="button"
           className="guess-panel__pass"
@@ -149,14 +185,16 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
         >
           Pass
         </button>
+        <button type="button" className="guess-panel__clear" onClick={clearLetters} disabled={disabled}>
+          Clear
+        </button>
         <button
           type="button"
-          className="hint-panel__toggle"
-          onClick={() => setHintMode(!hintMode)}
-          aria-expanded={hintMode}
-          title="Fill in any letters (or spaces, dashes, commas, parentheses) you're confident about — leave the rest blank. Matches update as you type."
+          className="guess-panel__submit"
+          onClick={handleSubmit}
+          disabled={!isComplete || disabled}
         >
-          {hintMode ? 'Hide hint mode' : 'Hint mode'}
+          Guess
         </button>
       </div>
 

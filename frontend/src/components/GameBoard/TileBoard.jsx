@@ -108,8 +108,6 @@ const TileBoard = forwardRef(function TileBoard(
     }
   }
 
-  const isOwnTile = (el) => Object.values(inputRefs.current).includes(el)
-
   useEffect(() => {
     if (readOnly) return undefined
 
@@ -119,7 +117,13 @@ const TileBoard = forwardRef(function TileBoard(
     }
 
     const handleDocumentKeyDown = (e) => {
-      if (isOwnTile(document.activeElement)) return
+      // Same guard as handleDocumentClick above -- without it, Space
+      // (e.key === ' ', a length-1 string) steals focus away from any
+      // other focused interactive control (a button, a link, the hint-mode
+      // switch) mid-press, so its native Space/Enter activation never
+      // completes. Only redirect when focus isn't already on something
+      // that's supposed to receive the keystroke itself.
+      if (document.activeElement?.closest(INTERACTIVE_SELECTOR)) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key.length !== 1) return
       focusTile(firstEmptyIndex())
