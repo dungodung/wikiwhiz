@@ -76,6 +76,7 @@ export default function GuessHistory({ guesses, totalClues }) {
         {guesses.map((g, i) =>
           g.is_pass ? (
             <li key={g.attempt_number} className="guess-history__item">
+              <span className="guess-history__trend" aria-hidden="true" />
               <span className="guess-history__number">{g.attempt_number}</span>
               <span className="guess-history__swatch guess-history__swatch--pass" aria-hidden="true">
                 –
@@ -84,6 +85,19 @@ export default function GuessHistory({ guesses, totalClues }) {
             </li>
           ) : (
             <li key={g.attempt_number} className="guess-history__item">
+              {(() => {
+                const trend = degreesTrend(guesses, i)
+                if (!trend || trend === 'same') return <span className="guess-history__trend" aria-hidden="true" />
+                return (
+                  <span
+                    className={`guess-history__trend guess-history__trend--${trend}`}
+                    title={trend === 'warmer' ? 'Closer than your last guess' : 'Farther than your last guess'}
+                    aria-label={trend === 'warmer' ? 'Getting warmer' : 'Getting colder'}
+                  >
+                    {trend === 'warmer' ? '▲' : '▼'}
+                  </span>
+                )
+              })()}
               <span className="guess-history__number">{g.attempt_number}</span>
               <span
                 className={`guess-history__swatch${g.degrees_pending ? ' guess-history__swatch--pending' : ''}`}
@@ -110,19 +124,6 @@ export default function GuessHistory({ guesses, totalClues }) {
                   g.degrees_value
                 )}
               </span>
-              {(() => {
-                const trend = degreesTrend(guesses, i)
-                if (!trend || trend === 'same') return null
-                return (
-                  <span
-                    className={`guess-history__trend guess-history__trend--${trend}`}
-                    title={trend === 'warmer' ? 'Closer than your last guess' : 'Farther than your last guess'}
-                    aria-label={trend === 'warmer' ? 'Getting warmer' : 'Getting colder'}
-                  >
-                    {trend === 'warmer' ? '▲' : '▼'}
-                  </span>
-                )
-              })()}
               {g.resolved_title ? (
                 <a
                   className="guess-history__text"

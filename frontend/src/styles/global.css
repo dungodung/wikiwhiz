@@ -489,8 +489,10 @@ body {
    warm=close/cool=far convention. */
 .guess-history__trend {
   flex-shrink: 0;
+  width: 0.75rem;
   font-size: 0.75rem;
   line-height: 1;
+  text-align: center;
 }
 
 .guess-history__trend--warmer {
@@ -734,20 +736,22 @@ a.guess-history__text:hover {
 /* Hint mode */
 /* A persistent, viewport-fixed control rather than scoped to the guess
    panel -- reachable regardless of scroll position while a puzzle is in
-   progress. `top: 5rem` clears the ~4rem-tall header (plain document
-   flow, not sticky -- see Header.jsx) with headroom to spare. The whole
-   toggle is kept to a single compact row so its bottom edge stays above
-   .guess-history's own `top: 7rem` fixed sidebar -- the two can be
-   on-screen at once during active play (GuessHistory renders as soon as
-   there's one guess, GuessPanel stays mounted until the puzzle ends), so
-   this must never grow tall enough to overlap it regardless of viewport
-   width. Folds back into normal document flow below 720px (matching
-   .app__main's own max-width -- see the media query near the bottom of
-   this file), since there's no side margin left to float into there
-   either. */
+   progress. `top: calc(5rem - 8px)` clears the ~4rem-tall header (plain
+   document flow, not sticky -- see Header.jsx) with headroom to spare.
+   The whole toggle is kept to a single compact row so its bottom edge
+   stays above .guess-history's own `top: 7rem` fixed sidebar -- the flat
+   5rem alone put the toggle's bottom edge ~3px *past* that boundary
+   (confirmed live), visibly clipping into .guess-history's box; the two
+   can be on-screen at once during active play (GuessHistory renders as
+   soon as there's one guess, GuessPanel stays mounted until the puzzle
+   ends), so this must never grow tall enough to overlap it regardless of
+   viewport width. Folds back into normal document flow below 720px
+   (matching .app__main's own max-width -- see the media query near the
+   bottom of this file), since there's no
+   side margin left to float into there either. */
 .hint-toggle {
   position: fixed;
-  top: 5rem;
+  top: calc(5rem - 8px);
   right: 1.5rem;
   z-index: 30;
   display: flex;
