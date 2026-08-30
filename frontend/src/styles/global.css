@@ -31,6 +31,14 @@
   --color-success: #2f8a5c;
 }
 
+:root[data-theme='light'] .admin-table a {
+  color: #1a56db;
+}
+
+:root[data-theme='light'] .admin-table a:visited {
+  color: #6b3fa0;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1111,6 +1119,20 @@ a.guess-history__text:hover {
 
 .admin-table__sort-btn:hover {
   color: var(--color-accent);
+}
+
+/* Wikipedia/userpage links in admin tables (see AdminArticles/AdminSchedule/
+   AdminArticleStats/AdminUsers) were left with the browser's default link
+   blue, which is nearly unreadable against the dark surface background --
+   lighten it here. Light mode's surface is already light enough for the
+   default blue to read fine, so it's left alone there (see the light
+   override below). */
+.admin-table a {
+  color: #a9c0f5;
+}
+
+.admin-table a:visited {
+  color: #c3aef0;
 }
 
 .admin-pager {
