@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import Pager from './Pager'
 import SortableHeader from './SortableHeader'
 import useSort from './useSort'
+import { wikipediaUserUrl } from '../../lib/wikipedia'
 
 export default function AdminUsers() {
   const [q, setQ] = useState('')
@@ -10,7 +11,7 @@ export default function AdminUsers() {
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [sort, onSort] = useSort('username')
+  const [sort, onSort] = useSort('created_at', 'desc')
 
   const load = () => {
     api.admin
@@ -72,7 +73,11 @@ export default function AdminUsers() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id}>
-                <td>{u.username}</td>
+                <td>
+                  <a href={wikipediaUserUrl(u.username)} target="_blank" rel="noopener noreferrer">
+                    {u.username}
+                  </a>
+                </td>
                 <td>{u.is_admin ? 'Yes' : 'No'}</td>
                 <td>{new Date(u.created_at).toLocaleDateString()}</td>
                 <td>

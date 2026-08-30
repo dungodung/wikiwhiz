@@ -21,7 +21,7 @@ from ...lib import degrees as degrees_lib
 from ...lib import hint_search
 from ...lib.mediawiki_api import MediaWikiClient
 from ...lib.similarity import bucket_lexical, score_lexical
-from ...lib.slot_pattern import KEPT_PUNCTUATION, normalize_to_tiles
+from ...lib.slot_pattern import KEPT_PUNCTUATION, fold_diacritics, normalize_to_tiles
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +368,11 @@ def process_guess(
         raise GameError("You already tried that guess.", status_code=409)
 
     answer_tiles = normalize_to_tiles(article.display_title)
-    is_correct = guess_tiles.lower() == answer_tiles.lower()
+    # The stored answer is already diacritic-free (normalize_to_tiles), so a
+    # guess typed with the "proper" accent (e.g. "Pelé" for answer "Pele")
+    # needs the same folding on this side too, or it'd wrongly count as
+    # wrong -- see lib/slot_pattern.py::fold_diacritics.
+    is_correct = fold_diacritics(guess_tiles).lower() == answer_tiles.lower()
 
     resolved = None if is_correct else _resolve_wrong_guess(article, guess_tiles, client)
     if resolved is not None and resolved.pageid == article.wiki_pageid:

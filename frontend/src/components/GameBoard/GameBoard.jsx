@@ -39,8 +39,16 @@ export default function GameBoard() {
     <div className="game-board">
       {!state.is_today && (
         <p className="game-board__archive-banner">
-          Playing {state.challenge_date} from the archive — <Link to="/archive">choose another day</Link>. This
-          doesn't count toward your stats.
+          {finished ? (
+            <>
+              You already played {state.challenge_date} from the archive — <Link to="/archive">choose another day</Link>.
+            </>
+          ) : (
+            <>
+              Playing {state.challenge_date} from the archive — <Link to="/archive">choose another day</Link>. This
+              doesn't count toward your stats.
+            </>
+          )}
         </p>
       )}
 

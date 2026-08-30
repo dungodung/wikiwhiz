@@ -71,3 +71,39 @@ def test_pageids_to_titles_chunks_past_fifty():
     assert client.session.get.call_count == 2
     assert len(result) == 60
     assert result[60] == "Title 60"
+
+
+def test_prefix_search_excludes_redirects_and_disambiguation_pages():
+    """The admin add-article popup's autocomplete -- neither a redirect nor
+    a disambiguation page is ever a valid answer (see prefix_search's own
+    docstring), so both must be filtered out even though the raw
+    generator=prefixsearch response includes them.
+    """
+    pages = {
+        "1": {"pageid": 1, "title": "Real Article", "index": 1},
+        "2": {"pageid": 2, "title": "A Redirect", "index": 2, "redirect": ""},
+        "3": {"pageid": 3, "title": "A Disambiguation Page", "index": 3, "pageprops": {"disambiguation": ""}},
+        "4": {"pageid": 4, "title": "Another Real Article", "index": 4},
+    }
+    client = _client_with_responses([{"query": {"pages": pages}}])
+
+    result = client.prefix_search("Real", limit=8)
+
+    assert [r["title"] for r in result] == ["Real Article", "Another Real Article"]
+
+
+def test_prefix_search_preserves_relevance_order():
+    """query.pages is a dict keyed by pageid -- not guaranteed to iterate in
+    request order, so ordering must come from each page's own `index`
+    rather than dict insertion order.
+    """
+    pages = {
+        "3": {"pageid": 3, "title": "Third", "index": 3},
+        "1": {"pageid": 1, "title": "First", "index": 1},
+        "2": {"pageid": 2, "title": "Second", "index": 2},
+    }
+    client = _client_with_responses([{"query": {"pages": pages}}])
+
+    result = client.prefix_search("T", limit=8)
+
+    assert [r["title"] for r in result] == ["First", "Second", "Third"]

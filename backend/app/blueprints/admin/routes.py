@@ -7,12 +7,15 @@ same lib functions the CLI content-authoring scripts use
 content are held to identical rules.
 """
 
+import logging
+import threading
 from datetime import date as date_cls
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import and_, case, func
 
 from ...extensions import db
+from ...lib import link_cache as link_cache_lib
 from ...lib.authz import require_admin
 from ...lib.clue_guard import can_promote_to_ready, leaks_title, usable_clue_count
 from ...lib.mediawiki_api import WIKIDATA_API, MediaWikiClient
@@ -25,6 +28,8 @@ from ...models.daily_challenge import DailyChallenge
 from ...models.link_cache import LinkCacheMeta
 from ...models.session import GameSession
 from ...models.user import User
+
+logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -183,7 +188,7 @@ def list_users():
     query = User.query
     if q:
         query = query.filter(User.wikimedia_username.ilike(f"%{q}%"))
-    order = _sort_order(USER_SORT_COLUMNS, "username")
+    order = _sort_order(USER_SORT_COLUMNS, "created_at", default_desc=True)
     users, total = _paginate(query.order_by(order), page, per_page)
     return jsonify({"users": [_serialize_user(u) for u in users], **_pagination_meta(page, per_page, total)})
 
@@ -411,6 +416,50 @@ def delete_article(article_id: int):
     db.session.delete(article)  # cascades to clues; daily_challenge FK has no cascade, but locked check above guarantees none exists in the past/today -- a future one is fine to cascade-delete too
     db.session.commit()
     return "", 204
+
+
+_LINK_CACHE_MAX_DEPTH = 4
+_LINK_CACHE_NODE_CAP = 3000
+
+
+@admin_bp.post("/articles/<int:article_id>/refresh-link-cache")
+@require_admin
+def refresh_link_cache(article_id: int):
+    """Kicks off scripts/precompute_link_cache.py's same logic (see
+    lib/link_cache.py, shared between that CLI tool and this button) in a
+    background thread and returns immediately -- a full BFS can take
+    anywhere from a few seconds to well over a minute for a hub-like
+    article, far past what's reasonable to hold an HTTP request open for.
+    Same fresh-app-context-per-thread pattern as
+    game/service.py::_spawn_live_degrees_computation, for the same reason:
+    Flask-SQLAlchemy's session is tied to the request context, which is
+    gone by the time this runs. No progress is streamed back -- the admin
+    articles list's existing "Link cache" column reflects the new count
+    next time it's loaded/refreshed.
+    """
+    article = db.session.get(Article, article_id)
+    if not article:
+        return jsonify({"error": "not_found"}), 404
+
+    app = current_app._get_current_object()
+
+    def worker() -> None:
+        with app.app_context():
+            client, is_replica = link_cache_lib.make_client(app.config["WIKIWHIZ_USER_AGENT"])
+            try:
+                a = db.session.get(Article, article_id)
+                if a is not None:
+                    link_cache_lib.precompute(db.session, a, _LINK_CACHE_MAX_DEPTH, _LINK_CACHE_NODE_CAP, client)
+                    db.session.commit()
+            except Exception:
+                logger.exception("Link cache refresh failed for article_id=%s", article_id)
+                db.session.rollback()
+            finally:
+                if is_replica:
+                    client.close()
+
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify({"status": "started"}), 202
 
 
 # --- Clues -----------------------------------------------------------------
@@ -670,6 +719,7 @@ def article_stats():
         db.session.query(
             Article.id.label("article_id"),
             Article.display_title,
+            Article.wiki_title,
             DailyChallenge.challenge_date,
             attempted.label("attempted"),
             won_total.label("won_total"),
@@ -681,7 +731,7 @@ def article_stats():
         .join(DailyChallenge, DailyChallenge.article_id == Article.id)
         .outerjoin(GameSession, GameSession.daily_challenge_id == DailyChallenge.id)
         .filter(DailyChallenge.challenge_date <= today_utc())
-        .group_by(Article.id, Article.display_title, DailyChallenge.challenge_date)
+        .group_by(Article.id, Article.display_title, Article.wiki_title, DailyChallenge.challenge_date)
     )
     sort_columns = {
         "article": Article.display_title,
@@ -702,6 +752,7 @@ def article_stats():
                 {
                     "article_id": r.article_id,
                     "display_title": r.display_title,
+                    "wiki_title": r.wiki_title,
                     "challenge_date": r.challenge_date.isoformat(),
                     "attempted": r.attempted,
                     "won_total": r.won_total,

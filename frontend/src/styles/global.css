@@ -14,6 +14,23 @@
   --font-serif: Georgia, 'Times New Roman', serif;
 }
 
+/* Dark is the unconditional default (see :root above); light mode is opt-in
+   via a data-theme attribute set on <html> from the persisted preference
+   (DB for logged-in users, localStorage for anonymous -- see ThemeToggle.jsx
+   and main.jsx's pre-paint inline script that avoids a flash of dark). */
+:root[data-theme='light'] {
+  --color-bg: #f4f6fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #e8ecf5;
+  --color-border: #d3daea;
+  --color-text: #1a2338;
+  --color-text-muted: #5b6785;
+  --color-accent: #b5820f;
+  --color-accent-text: #ffffff;
+  --color-danger: #c94a37;
+  --color-success: #2f8a5c;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -96,23 +113,51 @@ body {
 
 .login-button--authed {
   background: none;
+  position: relative;
+}
+
+.login-button__username {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-button__menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.6rem;
+  min-width: 10rem;
+}
+
+.login-button-group {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.login-button__username {
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.login-button__logout {
+.login-button__logout,
+.theme-toggle {
   background: none;
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   border-radius: var(--radius);
   padding: 0.35rem 0.7rem;
   cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
 }
 
 /* Game board */
@@ -1212,6 +1257,15 @@ a.guess-history__text:hover {
   flex-wrap: wrap;
 }
 
+.clue-editor__number {
+  flex-shrink: 0;
+  width: 1.4rem;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .clue-editor__type {
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -1296,6 +1350,14 @@ a.guess-history__text:hover {
      alone fits on one line. Full text (and its meaning) is still there
      for anyone above this width. */
   .login-button__full-text {
+    display: none;
+  }
+
+  /* Same reasoning as .login-button__full-text above -- the logged-out
+     toggle sits directly in the header row (unlike the logged-in one,
+     which is tucked inside a dropdown with room to spare) and its label
+     is the part most likely to force a wrap/overflow at this width. */
+  .login-button-group .theme-toggle__label {
     display: none;
   }
 }

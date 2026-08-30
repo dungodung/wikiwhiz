@@ -4,6 +4,7 @@ import ArticleDetail from './ArticleDetail'
 import Pager from './Pager'
 import SortableHeader from './SortableHeader'
 import useSort from './useSort'
+import { wikipediaUrl } from '../../lib/wikipedia'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 250
 
@@ -122,8 +123,8 @@ function NewArticleModal({ onClose, onCreated }) {
   }, [])
 
   return (
-    <div className="admin-modal-backdrop" onClick={onClose}>
-      <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-backdrop">
+      <div className="admin-modal">
         <h3>Add article manually</h3>
         <form className="admin-modal__form" onSubmit={submit}>
           <label>
@@ -192,6 +193,21 @@ export default function AdminArticles() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [sort, onSort] = useSort('created_at')
+  const [justStartedId, setJustStartedId] = useState(null)
+
+  const refreshLinkCache = async (id) => {
+    setError(null)
+    try {
+      await api.admin.refreshLinkCache(id)
+      // Confirms the request landed, not that the (much longer)
+      // background job finished -- the Link cache column reflects the new
+      // count next time this list reloads.
+      setJustStartedId(id)
+      setTimeout(() => setJustStartedId((current) => (current === id ? null : current)), 2000)
+    } catch (err) {
+      setError(err.data?.error || err.message)
+    }
+  }
 
   const load = () => {
     api.admin
@@ -262,13 +278,24 @@ export default function AdminArticles() {
           <tbody>
             {articles.map((a) => (
               <tr key={a.id}>
-                <td>{a.display_title}</td>
+                <td>
+                  <a href={wikipediaUrl(a.wiki_title)} target="_blank" rel="noopener noreferrer">
+                    {a.display_title}
+                  </a>
+                </td>
                 <td>{a.display_status}</td>
                 <td>{a.clue_count}</td>
                 <td>{a.link_cache_count ?? '—'}</td>
                 <td>{a.scheduled_date || '—'}</td>
                 <td>
                   <button type="button" onClick={() => setSelectedId(a.id)}>Open</button>
+                  <button
+                    type="button"
+                    onClick={() => refreshLinkCache(a.id)}
+                    title="Recompute this article's degrees-of-Wikipedia link cache in the background -- takes a few seconds to over a minute; the Link cache column updates next time this list reloads."
+                  >
+                    {justStartedId === a.id ? 'Started!' : 'Refresh cache'}
+                  </button>
                 </td>
               </tr>
             ))}

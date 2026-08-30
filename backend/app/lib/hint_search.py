@@ -107,24 +107,61 @@ def _candidate_query(pattern: str) -> str | None:
 
 
 def search_titles_by_regex(client: MediaWikiClient, slot_pattern: str, pattern: str) -> HintResult:
-    query = _candidate_query(pattern)
-    if query is None:
-        return HintResult()
-
-    try:
-        data = client.search_intitle(query, limit=CANDIDATE_FETCH_LIMIT)
-    except requests.RequestException:
-        logger.warning("Hint search failed for query=%r", query, exc_info=True)
-        return HintResult(unavailable=True)
-
-    candidates = [item["title"] for item in data.get("query", {}).get("search", [])]
-
     verifier = re.compile(build_regex(slot_pattern, pattern), re.IGNORECASE)
-    matches = [
-        HintMatch(title=title, tiles=normalize_to_tiles(title))
-        for title in candidates
-        if verifier.fullmatch(normalize_to_tiles(title))
-    ]
+    matches: list[HintMatch] = []
+    seen_titles: set[str] = set()
+
+    # A fully-typed-out pattern names an exact candidate title outright --
+    # no need to go through CirrusSearch's relevance ranking to find it, and
+    # confirmed live that ranking can't be relied on to surface it anyway:
+    # searching "EXTREMITY" (via the same intitle:.. OR .. query used below)
+    # never once returned the actual one-word article "Extremity" itself
+    # within the top 50 results, at *every* stage of typing it, because
+    # dozens of longer anatomy articles that merely mention the word rank
+    # higher. verify_real_article already solves exactly this lookup (a
+    # bare client.resolve_title(pattern) alone isn't enough on its own --
+    # the tile board only ever sends uppercase, and titles.= is case
+    # sensitive beyond the first letter, so "EXTREMITY" as a literal title
+    # lookup misses "Extremity" the same way "MONKEYS" once missed
+    # "Monkeys"; verify_real_article's search-based fallback, case
+    # insensitive and redirect aware, is what actually resolves it).
+    if PLACEHOLDER not in pattern:
+        direct = verify_real_article(client, pattern)
+        if direct.found:
+            tiles = normalize_to_tiles(direct.title)
+            if verifier.fullmatch(tiles):
+                matches.append(HintMatch(title=direct.title, tiles=tiles))
+                seen_titles.add(direct.title)
+
+    query = _candidate_query(pattern)
+    if query is not None:
+        try:
+            data = client.search_intitle(query, limit=CANDIDATE_FETCH_LIMIT)
+        except requests.RequestException:
+            logger.warning("Hint search failed for query=%r", query, exc_info=True)
+            # The direct-lookup match above (if any) is still real and worth
+            # keeping -- only report unavailable if that's genuinely all we
+            # have to show for this pattern.
+            return HintResult(matches=matches, unavailable=not matches)
+
+        for item in data.get("query", {}).get("search", []):
+            # A search hit's own title/pageid are always the *target*
+            # page's identity, even when the query only matched via one of
+            # its incoming redirects -- redirecttitle is what actually
+            # carries that redirect's own title. Checking only item["title"]
+            # here missed every redirect-only match entirely (confirmed
+            # live: "Extremity", a redirect to "Extremities", never
+            # surfaced as a hint suggestion at any stage of typing it,
+            # because "Extremities" itself doesn't fit a 9-tile board and
+            # "Extremity" -- the name that actually does -- was never
+            # checked). Same mechanism verify_real_article already uses.
+            for title in (item["title"], item.get("redirecttitle")):
+                if not title or title in seen_titles:
+                    continue
+                tiles = normalize_to_tiles(title)
+                if verifier.fullmatch(tiles):
+                    matches.append(HintMatch(title=title, tiles=tiles))
+                    seen_titles.add(title)
 
     return HintResult(matches=matches[:MAX_RESULTS], truncated=len(matches) > MAX_RESULTS)
 

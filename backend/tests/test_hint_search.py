@@ -61,6 +61,45 @@ def test_search_locally_filters_out_noisy_candidates():
     assert result.unavailable is False
 
 
+def test_search_finds_a_fully_typed_redirect_via_direct_lookup():
+    """Regression test: "Extremity" (9 letters) is a real redirect to
+    "Extremities" (10 letters, a different shape entirely) -- typing out
+    the whole word "EXTREMITY" never found it, even though it's a real,
+    correctly-shaped article, because search_titles_by_regex only ever
+    checked CirrusSearch candidates' own titles, never the redirecttitle
+    that would have actually named it. A fully-specified pattern now goes
+    through verify_real_article first (the same case-insensitive,
+    redirect-aware lookup guess submission already relies on), which finds
+    it via the search fallback's redirecttitle field.
+    """
+    client = MagicMock()
+    client.resolve_title.return_value = None  # case-sensitivity miss, as it would live
+    client.search_intitle.return_value = {
+        "query": {"search": [{"title": "Extremities", "pageid": 1137728, "redirecttitle": "Extremity"}]}
+    }
+
+    result = search_titles_by_regex(client, "L" * 9, "EXTREMITY")
+
+    assert [m.title for m in result.matches] == ["Extremity"]
+    assert result.matches[0].tiles == "Extremity"
+
+
+def test_search_finds_a_redirect_hit_via_redirecttitle_for_partial_pattern():
+    """Same underlying gap as above, but for a still-in-progress guess
+    (the general candidate loop, not the fully-typed direct-lookup path) --
+    a hit whose own title doesn't fit the board at all can still be a real
+    suggestion via its redirecttitle.
+    """
+    client = MagicMock()
+    client.search_intitle.return_value = {
+        "query": {"search": [{"title": "Extremities", "pageid": 1137728, "redirecttitle": "Extremity"}]}
+    }
+
+    result = search_titles_by_regex(client, "L" * 9, "EXTR_____")
+
+    assert [m.title for m in result.matches] == ["Extremity"]
+
+
 def test_search_returns_unavailable_on_network_failure():
     client = MagicMock()
     client.search_intitle.side_effect = requests.exceptions.HTTPError("429")

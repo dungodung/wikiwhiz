@@ -218,6 +218,38 @@ def test_correct_guess_wins(client, fixture_challenge):
     assert len(data["remaining_clues"]) == 4
 
 
+def test_guess_with_proper_diacritic_is_accepted_as_a_win(client, db):
+    """Regression test: the stored answer is already diacritic-free
+    (normalize_to_tiles strips accents, so "Pelé" the real Wikipedia title
+    scores against tiles "Pele") -- a plain-ASCII guess already won because
+    of that, but a guess typed with the article's *actual* accent ("Pelé")
+    was wrongly rejected, since only the stored side got folded, never the
+    incoming guess. See lib/slot_pattern.py::fold_diacritics.
+    """
+    article = Article(
+        wiki_title="Pelé",
+        wiki_pageid=999001,
+        display_title="Pelé",
+        slot_pattern=tile_shape("Pelé"),
+        status="ready",
+    )
+    db.session.add(article)
+    db.session.flush()
+    clue_ids = []
+    for i in range(5):
+        clue = Clue(article_id=article.id, clue_type="categories", reveal_rank_hint=i + 1, clue_text=f"fact {i}")
+        db.session.add(clue)
+        db.session.flush()
+        clue_ids.append(clue.id)
+    db.session.add(DailyChallenge(challenge_date=date.today(), article_id=article.id, clue_order=clue_ids))
+    db.session.commit()
+
+    resp = client.post("/api/game/guess", json={"guess_text": "Pelé"})
+    data = resp.get_json()
+    assert data["status"] == "won"
+    assert data["guesses"][0]["is_correct"] is True
+
+
 def test_redirect_to_the_answer_is_accepted_as_a_win(client, fixture_challenge):
     """A guess that doesn't literally match display_title but resolves (via
     client.resolve_title's redirect-following, mocked here through

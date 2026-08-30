@@ -9,6 +9,21 @@
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://wikiwhiz.toolforge.org/" />
 
+    <!-- Applies a saved light-theme choice before first paint, so there's
+         no flash of the (default) dark theme -- see src/lib/theme.js,
+         whose same localStorage key is also refreshed with a logged-in
+         player's server-side choice so it stays right across devices they
+         have used before, even before /auth/me responds on this load. -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('wikiwhiz:themePreference') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light')
+          }
+        } catch (e) {}
+      })()
+    </script>
+
     <!-- Social preview cards (Open Graph + Twitter). This is a static SPA
          shell served for every route (see backend/app/__init__.py's
          catch-all), so this is one general site-wide card, not a

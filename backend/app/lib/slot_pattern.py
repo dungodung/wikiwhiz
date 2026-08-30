@@ -36,6 +36,22 @@ _TRANSLIT = {
 KEPT_PUNCTUATION = " -,()"
 
 
+def fold_diacritics(text: str) -> str:
+    """Drop combining diacritical marks only (e.g. 'e' + acute accent -> 'e')
+    -- unlike normalize_to_tiles below, this never expands/remaps a
+    character (no _TRANSLIT), so it's length- and position-preserving,
+    letter-for-letter. That's what makes it safe to apply to a player's
+    already-shape-validated guess: the real Wikipedia title ("Pele") is
+    itself diacritic-free after normalize_to_tiles (æ/ß/etc. aside, NFKD
+    decomposition of a plain accented Latin letter is exactly one base
+    letter plus one combining mark), so a guess typed with the "proper"
+    accent (e.g. "Pelé") needs exactly this same folding to compare equal
+    to it -- see game/service.py's is_correct check.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    return decomposed.encode("ascii", "ignore").decode("ascii")
+
+
 def normalize_to_tiles(title: str) -> str:
     """Actual letters (case preserved) plus KEPT_PUNCTUATION characters --
     everything else (quotation marks, diacritics, other punctuation) is
@@ -43,8 +59,7 @@ def normalize_to_tiles(title: str) -> str:
     filled-in guess.
     """
     transliterated = "".join(_TRANSLIT.get(ch, ch) for ch in title)
-    decomposed = unicodedata.normalize("NFKD", transliterated)
-    ascii_text = decomposed.encode("ascii", "ignore").decode("ascii")
+    ascii_text = fold_diacritics(transliterated)
     return "".join(ch for ch in ascii_text if ch.isalpha() or ch in KEPT_PUNCTUATION)
 
 

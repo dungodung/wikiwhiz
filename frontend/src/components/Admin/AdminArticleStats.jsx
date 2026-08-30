@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import Pager from './Pager'
 import SortableHeader from './SortableHeader'
 import useSort from './useSort'
+import { wikipediaUrl } from '../../lib/wikipedia'
 
 export default function AdminArticleStats() {
   const [rows, setRows] = useState([])
@@ -81,7 +82,11 @@ export default function AdminArticleStats() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.article_id}>
-                  <td>{r.display_title}</td>
+                  <td>
+                    <a href={wikipediaUrl(r.wiki_title)} target="_blank" rel="noopener noreferrer">
+                      {r.display_title}
+                    </a>
+                  </td>
                   <td>{r.challenge_date}</td>
                   <td>{r.attempted}</td>
                   <td>{r.won_total}</td>

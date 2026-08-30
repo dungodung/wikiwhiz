@@ -73,8 +73,32 @@ def me():
             "username": user.wikimedia_username,
             "is_admin": user.is_admin,
             "hint_mode_preference": user.hint_mode_preference,
+            "theme_preference": user.theme_preference,
         }
     )
+
+
+@auth_bp.patch("/theme")
+def update_theme():
+    """Persists the logged-in player's light/dark theme choice, mirroring
+    update_hint_mode below. Anonymous play has no user row to persist this
+    on, so it's a 401 there -- the frontend falls back to localStorage.
+    """
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "not_authenticated"}), 401
+    user = db.session.get(User, user_id)
+    if user is None:
+        session.pop("user_id", None)
+        return jsonify({"error": "not_authenticated"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    theme = payload.get("theme")
+    if theme not in ("dark", "light"):
+        return jsonify({"error": "invalid_theme"}), 400
+    user.theme_preference = theme
+    db.session.commit()
+    return jsonify({"theme_preference": user.theme_preference})
 
 
 @auth_bp.patch("/hint-mode")

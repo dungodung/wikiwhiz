@@ -50,7 +50,7 @@ export function NewClueForm({ articleId, onCreated }) {
   )
 }
 
-export function ClueRow({ clue, locked, onChanged, onMove, isFirst, isLast }) {
+export function ClueRow({ number, clue, locked, onChanged, onMove, isFirst, isLast }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(clue.clue_text)
   const [error, setError] = useState(null)
@@ -74,6 +74,7 @@ export function ClueRow({ clue, locked, onChanged, onMove, isFirst, isLast }) {
 
   return (
     <li className="clue-editor__row">
+      <span className="clue-editor__number">{number}</span>
       <span className="clue-editor__type">{clue.clue_type}</span>
       {editing ? (
         <input value={text} onChange={(e) => setText(e.target.value)} style={{ flex: 1 }} />

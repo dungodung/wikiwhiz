@@ -68,6 +68,7 @@ export default function ArticleDetail({ articleId, onBack }) {
         {article.clues.map((clue, i) => (
           <ClueRow
             key={clue.id}
+            number={i + 1}
             clue={clue}
             locked={article.locked}
             onChanged={load}

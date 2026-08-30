@@ -38,6 +38,7 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   setHintModePreference: (enabled) =>
     request('/auth/hint-mode', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+  setThemePreference: (theme) => request('/auth/theme', { method: 'PATCH', body: JSON.stringify({ theme }) }),
   myStats: () => request('/stats/me'),
 
   admin: {
@@ -59,6 +60,7 @@ export const api = {
     createArticle: (body) => request('/admin/articles', { method: 'POST', body: JSON.stringify(body) }),
     updateArticle: (id, body) => request(`/admin/articles/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     deleteArticle: (id) => request(`/admin/articles/${id}`, { method: 'DELETE' }),
+    refreshLinkCache: (id) => request(`/admin/articles/${id}/refresh-link-cache`, { method: 'POST' }),
 
     createClue: (body) => request('/admin/clues', { method: 'POST', body: JSON.stringify(body) }),
     updateClue: (id, body) => request(`/admin/clues/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

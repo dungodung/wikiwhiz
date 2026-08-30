@@ -504,6 +504,20 @@ def test_list_articles_rejects_unknown_sort_key(client, db, admin_user):
     assert resp.status_code == 200  # falls back to the default sort rather than erroring
 
 
+def test_list_users_defaults_to_newest_joined_first(client, db, admin_user):
+    older = User(wikimedia_sub="older-sub", wikimedia_username="OlderUser", is_admin=False)
+    newer = User(wikimedia_sub="newer-sub", wikimedia_username="NewerUser", is_admin=False)
+    db.session.add_all([older, newer])
+    db.session.flush()
+    older.created_at = datetime.now(timezone.utc) - timedelta(days=5)
+    newer.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.session.commit()
+
+    resp = client.get("/api/admin/users")  # no sort param -- default
+    usernames = [u["username"] for u in resp.get_json()["users"]]
+    assert usernames.index("NewerUser") < usernames.index("OlderUser")
+
+
 def test_list_users_sorts_by_username_descending(client, db, admin_user):
     db.session.add(User(wikimedia_sub="z-sub", wikimedia_username="ZUser", is_admin=False))
     db.session.commit()

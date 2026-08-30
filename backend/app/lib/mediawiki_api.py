@@ -96,21 +96,44 @@ class MediaWikiClient:
         return None
 
     def prefix_search(self, query: str, limit: int = 8, timeout: float = _DEFAULT_TIMEOUT) -> list[dict]:
-        """Title autocomplete, namespace 0 only -- `list=prefixsearch` is the
-        purpose-built MediaWiki endpoint for type-ahead suggestions (unlike
-        `list=search`/CirrusSearch, which ranks by relevance rather than
-        literal prefix match, and is what hint_search.py uses instead for a
-        different reason -- see that module). Returns [{"title","pageid"}],
-        already in the API's own relevance order.
+        """Title autocomplete for the admin add-article popup, namespace 0
+        only, excluding redirects and disambiguation pages -- neither can
+        ever be a valid answer (a redirect isn't a real article in its own
+        right, and a disambiguation page has no single subject for clues to
+        describe), so there's no point offering them as picks here. This is
+        specific to *this* lookup, the content-authoring one -- the
+        in-game player-facing search (hint_search.py) is a different
+        method/endpoint entirely and is deliberately untouched by this: a
+        player's wrong guess resolving to a redirect is a real, intended
+        game mechanic (see game/service.py's redirect-to-answer handling),
+        not a content-authoring mistake to filter out.
+
+        Plain `list=prefixsearch` can't distinguish these, so this uses
+        `generator=prefixsearch` instead (combinable with `prop=info` for
+        the `redirect` flag and `prop=pageprops` for `disambiguation`).
+        Over-fetches to compensate for filtered-out results, since
+        gpslimit is capped at the raw candidate count before filtering,
+        not the count after.
         """
         data = self.query(
-            {"list": "prefixsearch", "pssearch": query, "pslimit": limit, "psnamespace": 0},
+            {
+                "generator": "prefixsearch",
+                "gpssearch": query,
+                "gpslimit": min(limit * 3, 50),
+                "gpsnamespace": 0,
+                "prop": "info|pageprops",
+                "ppprop": "disambiguation",
+            },
             timeout=timeout,
         )
-        return [
-            {"title": item["title"], "pageid": item["pageid"]}
-            for item in data.get("query", {}).get("prefixsearch", [])
+        pages = data.get("query", {}).get("pages", {})
+        candidates = sorted(pages.values(), key=lambda page: page.get("index", 0))
+        results = [
+            {"title": page["title"], "pageid": page["pageid"]}
+            for page in candidates
+            if "redirect" not in page and "disambiguation" not in page.get("pageprops", {})
         ]
+        return results[:limit]
 
     def get_wikibase_item(self, title: str, timeout: float = _DEFAULT_TIMEOUT) -> str | None:
         """The Wikidata QID linked from this enwiki article's page, if any."""

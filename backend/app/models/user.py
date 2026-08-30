@@ -16,6 +16,12 @@ class User(db.Model):
     wikimedia_username = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     hint_mode_preference = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
+    theme_preference = db.Column(
+        db.Enum("dark", "light", name="theme_preference"),
+        nullable=False,
+        default="dark",
+        server_default="dark",
+    )
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     last_login_at = db.Column(db.DateTime, nullable=True)
 

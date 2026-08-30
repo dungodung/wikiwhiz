@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import Pager from './Pager'
 import SortableHeader from './SortableHeader'
 import useSort from './useSort'
+import { wikipediaUrl } from '../../lib/wikipedia'
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
@@ -59,7 +60,9 @@ export default function AdminSchedule() {
 
   return (
     <div className="admin-panel">
-      <p>Upcoming scheduled days. Today and past days are locked and cannot be changed here.</p>
+      <p className="admin-panel__hint">
+        Upcoming scheduled days. Today and past days are locked and cannot be changed here.
+      </p>
       {error && <p className="game-board__status game-board__status--error">{error}</p>}
       <div className="admin-table-wrap">
       <table className="admin-table">
@@ -74,7 +77,11 @@ export default function AdminSchedule() {
           {days.map((d) => (
             <tr key={d.challenge_date}>
               <td>{d.challenge_date}</td>
-              <td>{d.wiki_title}</td>
+              <td>
+                <a href={wikipediaUrl(d.wiki_title)} target="_blank" rel="noopener noreferrer">
+                  {d.wiki_title}
+                </a>
+              </td>
               <td>
                 {!d.locked && (
                   <>
