@@ -262,8 +262,8 @@ body {
   width: 2.4rem;
   height: 2.9rem;
   flex-shrink: 0;
-  border: none;
-  border-bottom: 3px solid var(--color-accent);
+  border: 2px solid var(--color-accent);
+  border-radius: 4px;
   background: transparent;
   display: flex;
   align-items: center;
@@ -282,11 +282,11 @@ body {
 .tile-board__tile:focus {
   outline: none;
   background: var(--color-surface-raised);
-  border-bottom-color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .tile-board__tile--filled {
-  border-bottom-color: var(--color-success);
+  border-color: var(--color-success);
 }
 
 .closeness-bar {
