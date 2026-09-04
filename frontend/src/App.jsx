@@ -40,7 +40,7 @@ export default function App() {
           <Route path="/archive/:date" element={<GameBoard />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/info" element={<InfoPage />} />
-          <Route path="/admin" element={<Navigate to="/admin/articles" replace />} />
+          <Route path="/admin" element={<Navigate to="/admin/stats" replace />} />
           <Route path="/admin/:tab" element={<AdminRoute />} />
         </Routes>
       </main>

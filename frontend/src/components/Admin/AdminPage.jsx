@@ -5,10 +5,10 @@ import AdminSchedule from './AdminSchedule'
 import AdminArticleStats from './AdminArticleStats'
 
 const TABS = {
-  articles: { label: 'Articles & clues', Component: AdminArticles },
-  schedule: { label: 'Schedule', Component: AdminSchedule },
   stats: { label: 'Article stats', Component: AdminArticleStats },
   users: { label: 'Users', Component: AdminUsers },
+  articles: { label: 'Articles & clues', Component: AdminArticles },
+  schedule: { label: 'Schedule', Component: AdminSchedule },
 }
 
 // Tab comes from the URL (see App.jsx's /admin/:tab route) rather than
@@ -18,7 +18,7 @@ export default function AdminPage() {
   const { tab } = useParams()
   const navigate = useNavigate()
 
-  if (!TABS[tab]) return <Navigate to="/admin/articles" replace />
+  if (!TABS[tab]) return <Navigate to="/admin/stats" replace />
   const { Component } = TABS[tab]
 
   return (
