@@ -100,6 +100,24 @@ def test_pageids_to_titles_converts_dbkey_back_to_spaces():
     assert result == {736: "Albert Einstein"}
 
 
+def test_redirects_to_converts_target_title_to_dbkey_and_result_back_to_spaces():
+    client, cursor = _mock_client_with_rows([{"page_title": "Colloseum"}])
+
+    result = client.redirects_to(49603, "Colosseum")
+
+    assert result == {"Colloseum"}
+    sql, params = cursor.execute.call_args.args
+    assert params == ["Colosseum"]
+
+
+def test_redirects_to_empty_when_no_redirects_point_at_title():
+    client, cursor = _mock_client_with_rows([])
+
+    result = client.redirects_to(49603, "Colosseum")
+
+    assert result == set()
+
+
 def test_queries_are_parameterized_not_string_interpolated():
     """A title/pageid flowing into a WHERE clause must never be interpolated
     directly into the SQL string -- regression guard against SQL injection.

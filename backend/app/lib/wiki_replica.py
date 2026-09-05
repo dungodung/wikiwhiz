@@ -174,6 +174,28 @@ class WikiReplicaClient:
                     result[orig] = row["page_id"]
         return result
 
+    def redirects_to(self, pageid: int, title: str, timeout: float = 0) -> set[str]:
+        """Titles (namespace 0) of every redirect page that points at the
+        page titled `title`. MediaWiki's `redirect` table records a
+        redirect's target as (namespace, title) text, not a pageid, so this
+        looks up by title rather than `pageid` (accepted only for
+        signature parity with MediaWikiClient.redirects_to; unused here).
+        See that method's docstring for why this exclusion matters.
+        """
+        out: set[str] = set()
+        dbkey = _to_dbkey(title)
+        sql = """
+            SELECT p.page_title
+            FROM redirect r
+            JOIN page p ON p.page_id = r.rd_from
+            WHERE r.rd_namespace = 0 AND r.rd_title = %s AND r.rd_interwiki = ''
+        """
+        with self._conn.cursor() as cur:
+            cur.execute(sql, [dbkey])
+            for row in cur.fetchall():
+                out.add(_from_dbkey(row["page_title"]))
+        return out
+
     def pageids_to_titles(self, pageids: list[int], timeout: float = 0) -> dict[int, str]:
         result: dict[int, str] = {}
         for chunk in _chunks(pageids, _QUERY_CHUNK_SIZE):

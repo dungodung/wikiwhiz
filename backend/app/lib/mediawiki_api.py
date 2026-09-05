@@ -179,6 +179,31 @@ class MediaWikiClient:
                 out[page["title"]] = int(pageid_str)
         return out
 
+    def redirects_to(self, pageid: int, title: str, timeout: float = _DEFAULT_TIMEOUT) -> set[str]:
+        """Titles (namespace 0) of every redirect page that points at
+        `pageid`. `title` is accepted only for signature parity with
+        WikiReplicaClient.redirects_to (its SQL looks redirects up by
+        target title, not pageid) -- unused here.
+
+        Used by lib/link_cache.py to keep a redirect *to the answer itself*
+        out of the same-shape neighbor cache: titles_to_pageids resolves a
+        redirect page to its own pageid, not its target's (see that
+        method's docstring), so without this exclusion such a redirect gets
+        cached as a distinct degree-1 "wrong but real" neighbor instead of
+        the correct guess it actually is. Leaving it out of the cache lets
+        it fall through to hint_search.verify_real_article's live
+        redirect-following instead, which already resolves it correctly.
+        """
+        out: set[str] = set()
+        for page in self.query_all(
+            {"pageids": pageid, "prop": "redirects", "rdnamespace": 0, "rdlimit": "max"},
+            timeout=timeout,
+        ):
+            for entry in page.get("pages", {}).values():
+                for r in entry.get("redirects", []):
+                    out.add(r["title"])
+        return out
+
     def pageids_to_titles(self, pageids: list[int], timeout: float = _DEFAULT_TIMEOUT) -> dict[int, str]:
         """Batch pageid -> title, for pageids that still exist."""
         out: dict[int, str] = {}

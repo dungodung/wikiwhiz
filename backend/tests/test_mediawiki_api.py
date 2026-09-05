@@ -73,6 +73,34 @@ def test_pageids_to_titles_chunks_past_fifty():
     assert result[60] == "Title 60"
 
 
+def test_redirects_to_collects_titles_across_continuation():
+    client = _client_with_responses(
+        [
+            {
+                "query": {"pages": {"49603": {"pageid": 49603, "redirects": [{"pageid": 284813, "title": "Colloseum"}]}}},
+                "continue": {"rdcontinue": "49603|1"},
+            },
+            {
+                "query": {
+                    "pages": {"49603": {"pageid": 49603, "redirects": [{"pageid": 999, "title": "The Colosseum"}]}}
+                }
+            },
+        ]
+    )
+
+    result = client.redirects_to(49603, "Colosseum")
+
+    assert result == {"Colloseum", "The Colosseum"}
+
+
+def test_redirects_to_empty_when_page_has_no_redirects():
+    client = _client_with_responses([{"query": {"pages": {"49603": {"pageid": 49603}}}}])
+
+    result = client.redirects_to(49603, "Colosseum")
+
+    assert result == set()
+
+
 def test_prefix_search_excludes_redirects_and_disambiguation_pages():
     """The admin add-article popup's autocomplete -- neither a redirect nor
     a disambiguation page is ever a valid answer (see prefix_search's own

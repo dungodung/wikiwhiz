@@ -53,6 +53,17 @@ def precompute(session, article: Article, max_depth: int, node_cap: int, client:
     # differently-shaped articles as stepping stones; this just filters what
     # gets written to link_cache_nodes.
     answer_tile_count = len(normalize_to_tiles(article.display_title))
+    # A redirect *to the answer itself* (e.g. "Colloseum" -> "Colosseum")
+    # would otherwise get cached as a distinct same-shape "wrong but real"
+    # neighbor at whatever degree it was discovered -- titles_to_pageids
+    # resolves it to its own pageid, not the answer's, so it never matches
+    # article.wiki_pageid in game/service.py::process_guess's redirect
+    # check. Excluding these here lets a guess spelling one fall through to
+    # hint_search.verify_real_article's live redirect-following instead,
+    # which resolves it to the answer correctly. Confirmed live: exactly
+    # this let a correct guess ("Colloseum" for "Colosseum") get rejected
+    # as a wrong, degree-1 guess.
+    redirects_to_answer = client.redirects_to(article.wiki_pageid, article.wiki_title)
     session.query(LinkCacheNode).filter_by(answer_article_id=article.id).delete()
     meta = session.get(LinkCacheMeta, article.id) or LinkCacheMeta(answer_article_id=article.id)
     meta.max_depth_precomputed = max_depth
@@ -109,6 +120,8 @@ def precompute(session, article: Article, max_depth: int, node_cap: int, client:
         if node_degree == 0:
             continue
         node_title = title_by_pageid[pageid]
+        if node_title in redirects_to_answer:
+            continue
         node_tiles = normalize_to_tiles(node_title)
         if len(node_tiles) != answer_tile_count:
             continue
