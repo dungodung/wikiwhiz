@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WikiWhiz</title>
+    <meta name="description" content="Guess the day's Wikipedia article from a series of clues." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://wikiwhiz.toolforge.org/" />
+
+    <!-- Applies a saved light-theme choice before first paint, so there's
+         no flash of the (default) dark theme -- see src/lib/theme.js,
+         whose same localStorage key is also refreshed with a logged-in
+         player's server-side choice so it stays right across devices they
+         have used before, even before /auth/me responds on this load. -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('wikiwhiz:themePreference') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light')
+          }
+        } catch (e) {}
+      })()
+    </script>
+
+    <!-- Social preview cards (Open Graph + Twitter). This is a static SPA
+         shell served for every route (see backend/app/__init__.py's
+         catch-all), so this is one general site-wide card, not a
+         per-puzzle one -- a crawler never runs the frontend JS, so a
+         dynamic per-puzzle card would need real server-side rendering,
+         which this deploy shape (prebuilt static index.html served by
+         Flask, see docs/deployment-toolforge.md) doesn't have. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WikiWhiz" />
+    <meta property="og:title" content="WikiWhiz" />
+    <meta property="og:description" content="Guess the day's Wikipedia article from a series of clues." />
+    <meta property="og:url" content="https://wikiwhiz.toolforge.org/" />
+    <meta property="og:image" content="https://wikiwhiz.toolforge.org/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="WikiWhiz: guess the day's Wikipedia article from a series of clues" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="WikiWhiz" />
+    <meta name="twitter:description" content="Guess the day's Wikipedia article from a series of clues." />
+    <meta name="twitter:image" content="https://wikiwhiz.toolforge.org/og-image.png" />
+
+    <!-- Structured data for search results (e.g. a game/app rich result) --
+         this is the one piece of markup Google can read without executing
+         any JS, unlike the actual puzzle content below, which is entirely
+         client-rendered (see the noscript fallback and the comment on
+         #root). -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "WikiWhiz",
+        "url": "https://wikiwhiz.toolforge.org/",
+        "description": "Guess the day's Wikipedia article from a series of clues. A new puzzle every day.",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-CNqdMdl-.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DtMF2Tys.css">
+  </head>
+  <body>
+    <!-- #root is empty until React mounts -- a crawler that doesn't execute
+         JS (some do, most notably Googlebot; many others, including most
+         social-preview scrapers and less common search engines, don't) sees
+         nothing here at all. This noscript block is the only indexable
+         description of what the page actually is for that case; it's
+         replaced/ignored the instant JS runs, so it never causes any
+         visible duplication for real users. -->
+    <noscript>
+      <h1>WikiWhiz</h1>
+      <p>Guess the day's Wikipedia article from a series of clues. A new puzzle every day.</p>
+    </noscript>
+    <div id="root"></div>
+  </body>
+</html>
