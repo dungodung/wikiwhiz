@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 import requests
 
 from .mediawiki_api import MediaWikiClient
-from .slot_pattern import KEPT_PUNCTUATION, normalize_to_tiles
+from .slot_pattern import is_tile_char, normalize_to_tiles
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,8 @@ def _validate(slot_pattern: str, pattern: str) -> None:
     if len(pattern) != len(slot_pattern):
         raise ValueError("pattern length must match the puzzle's tile count")
     for ch in pattern:
-        if ch != PLACEHOLDER and not (ch.isalpha() or ch in KEPT_PUNCTUATION):
-            raise ValueError("tiles may only contain letters, kept punctuation, or '_'")
+        if ch != PLACEHOLDER and not is_tile_char(ch):
+            raise ValueError("tiles may only contain letters, digits, kept punctuation, or '_'")
 
 
 def build_regex(slot_pattern: str, pattern: str) -> str:

@@ -20,8 +20,9 @@ def test_comma_and_parentheses_count_as_tiles_but_are_not_revealed():
     assert tile_shape("Mercury (element)") == "L" * 17
 
 
-def test_quotation_marks_and_digits_are_discarded():
-    assert tile_shape('The "Great" Escape (1963)') == "L" * len("The Great Escape ()")
+def test_quotation_marks_are_discarded_but_digits_are_kept():
+    assert tile_shape('The "Great" Escape (1963)') == "L" * len("The Great Escape (1963)")
+    assert normalize_to_tiles("Apollo 11") == "Apollo 11"
 
 
 def test_diacritics_normalize_to_ascii():

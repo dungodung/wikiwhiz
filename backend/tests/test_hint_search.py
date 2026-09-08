@@ -32,7 +32,11 @@ def test_rejects_wrong_length():
 
 def test_rejects_invalid_characters():
     with pytest.raises(ValueError):
-        build_regex("LLL", "a1_")
+        build_regex("LLL", "a!_")
+
+
+def test_allows_digits():
+    assert build_regex("LL", "1_") == "^1.$"
 
 
 def test_search_locally_filters_out_noisy_candidates():

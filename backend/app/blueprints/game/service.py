@@ -21,7 +21,7 @@ from ...lib import degrees as degrees_lib
 from ...lib import hint_search
 from ...lib.mediawiki_api import MediaWikiClient
 from ...lib.similarity import bucket_lexical, score_lexical
-from ...lib.slot_pattern import KEPT_PUNCTUATION, fold_diacritics, normalize_to_tiles
+from ...lib.slot_pattern import fold_diacritics, is_tile_char, normalize_to_tiles
 
 logger = logging.getLogger(__name__)
 
@@ -221,15 +221,15 @@ def _update_user_stats(user_id: int, won: bool, attempt_number: int | None) -> N
 def check_guess_shape(article: Article, guess_tiles: str) -> None:
     """A guess is entered by filling the article's tile board directly, so it
     must already be the right length. Nothing is pre-revealed -- spaces,
-    dashes, commas, and parentheses are guessable tiles just like letters,
-    not fixed positions -- so the only server-side check left is length and
-    that every character is one the game could ever actually use.
+    dashes, commas, parentheses, and digits are guessable tiles just like
+    letters, not fixed positions -- so the only server-side check left is
+    length and that every character is one the game could ever actually use.
     """
     if len(guess_tiles) != len(article.slot_pattern):
         raise GameError("Guess must fill every tile.", status_code=400)
     for ch in guess_tiles:
-        if not (ch.isalpha() or ch in KEPT_PUNCTUATION):
-            raise GameError("Tiles must be filled with letters or valid punctuation.", status_code=400)
+        if not is_tile_char(ch):
+            raise GameError("Tiles must be filled with letters, digits, or valid punctuation.", status_code=400)
 
 
 class _WrongGuessResolution:
