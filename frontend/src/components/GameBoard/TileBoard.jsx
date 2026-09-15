@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 
 // Renders the flat tile board from the backend (Article.slot_pattern, see
 // backend/app/lib/slot_pattern.py): one row of tiles, all of them guessable
@@ -62,8 +62,29 @@ const TileBoard = forwardRef(function TileBoard(
   const inputRefs = useRef({})
   const length = slotPattern.length
 
+  // Typing a space can split the trailing "open" word group into a closed
+  // group plus a new open one (see groupIntoWords below) -- the tile that's
+  // about to receive focus is then part of a group that didn't exist in
+  // the previous render, so React mounts it as a brand-new DOM node rather
+  // than reusing the old one. Calling .focus() synchronously (before that
+  // re-render commits) targets the soon-to-be-discarded old node, so focus
+  // silently vanishes the instant the new tree replaces it. Deferring the
+  // actual .focus() call to a layout effect -- which runs after React has
+  // committed the restructured DOM, once inputRefs has been re-populated
+  // with whichever node now really occupies that index -- fixes this for
+  // every caller, not just the space case, since the same hazard applies
+  // any time a keystroke both changes a tile's content and moves focus in
+  // the same event.
+  const [pendingFocus, setPendingFocus] = useState(null)
+
+  useLayoutEffect(() => {
+    if (pendingFocus === null) return
+    inputRefs.current[pendingFocus]?.focus()
+    setPendingFocus(null)
+  }, [pendingFocus, letters])
+
   const focusTile = (index) => {
-    inputRefs.current[index]?.focus()
+    setPendingFocus(index)
   }
 
   // Exposed so a parent can pull focus back to tile 0 after a submitted
@@ -88,6 +109,18 @@ const TileBoard = forwardRef(function TileBoard(
 
   const handleChange = (index, rawValue) => {
     const char = rawValue.slice(-1).toUpperCase()
+    if (char === ' ' && (letters[index - 1] === ' ' || letters[index + 1] === ' ')) {
+      // Two adjacent spaces can never appear in a real article title --
+      // reject the keystroke. Re-setting the tile's existing value (rather
+      // than just returning) forces React to reconcile the input's DOM
+      // value back to what it actually is; this is a controlled input, but
+      // the browser has already applied the rejected space to the native
+      // DOM value by the time onChange fires; without a state update here
+      // to trigger a re-render, that stray space would keep showing until
+      // some unrelated change happened to re-render this tile.
+      onLetterChange(index, letters[index] || '')
+      return
+    }
     onLetterChange(index, char)
     if (char) stepTo(index, 1)
   }
@@ -161,8 +194,11 @@ const TileBoard = forwardRef(function TileBoard(
   return (
     <div className="tile-board-viewport">
       <div className="tile-board" role="group" aria-label="Answer tiles">
-        {groupIntoWords(values, { allowOpenTrailing: true }).map((group, gi) => (
-          <span className={`tile-board__word${group.closed ? '' : ' tile-board__word--open'}`} key={gi}>
+        {groupIntoWords(values, { allowOpenTrailing: true }).map((group) => (
+          <span
+            className={`tile-board__word${group.closed ? '' : ' tile-board__word--open'}`}
+            key={group.indices[0]}
+          >
             {group.indices.map((i) => (
               <input
                 key={i}
