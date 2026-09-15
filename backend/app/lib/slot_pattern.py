@@ -82,3 +82,18 @@ def tile_shape(title: str) -> str:
     what the frontend renders: nothing is revealed pre-win.
     """
     return "L" * len(normalize_to_tiles(title))
+
+
+def word_count(title: str) -> int:
+    """Number of space-separated runs in normalize_to_tiles(title) -- a
+    "word" is whatever sits between spaces (or the start/end of the
+    answer), so "see-saw" (dash, no space) is one word but "George
+    Clooney" is two. Kept punctuation other than space (dash, comma,
+    parenthesis) never splits a word, matching how KEPT_PUNCTUATION tiles
+    are guessable content, not word boundaries.
+
+    Unlike slot_pattern (compared against every guess, so stored once at
+    insert time), this is only ever used for display -- computed fresh from
+    display_title on each read, same as tile_shape could be.
+    """
+    return len([part for part in normalize_to_tiles(title).split(" ") if part])

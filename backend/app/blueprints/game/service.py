@@ -21,7 +21,7 @@ from ...lib import degrees as degrees_lib
 from ...lib import hint_search
 from ...lib.mediawiki_api import MediaWikiClient
 from ...lib.similarity import bucket_lexical, score_lexical
-from ...lib.slot_pattern import fold_diacritics, is_tile_char, normalize_to_tiles
+from ...lib.slot_pattern import fold_diacritics, is_tile_char, normalize_to_tiles, word_count
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,7 @@ def serialize_state(session_row: GameSession | None, daily_challenge: DailyChall
         "challenge_date": daily_challenge.challenge_date.isoformat(),
         "is_today": daily_challenge.challenge_date == today_utc(),
         "slot_pattern": article.slot_pattern,
+        "word_count": word_count(article.display_title),
         "clues_revealed": ordered_clues,
         "total_clues_available": len(daily_challenge.clue_order),
         "status": status,

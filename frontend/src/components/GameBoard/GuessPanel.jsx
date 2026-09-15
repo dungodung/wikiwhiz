@@ -40,7 +40,16 @@ function initialLetters(slotPattern) {
 // tiles ARE the guess input now, not a separate free-text box. Parent
 // (GameBoard) mounts this with `key={challenge_date}` so switching puzzles
 // remounts it with fresh state instead of needing a reset effect.
-export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, disabled, guessCount, totalClues }) {
+export default function GuessPanel({
+  slotPattern,
+  wordCount,
+  dateStr,
+  onSubmit,
+  onPass,
+  disabled,
+  guessCount,
+  totalClues,
+}) {
   const tileBoardRef = useRef(null)
   const [letters, setLetters] = useState(() => initialLetters(slotPattern))
   const authenticated = useAuthStore((s) => s.authenticated)
@@ -173,7 +182,16 @@ export default function GuessPanel({ slotPattern, dateStr, onSubmit, onPass, dis
         </button>
       </div>
 
-      {hintMode && <p className="guess-panel__length-hint">Answer is {slotPattern.length} letters.</p>}
+      {/* Unlike the fill-in-what-you-know hint mode above, letter/word
+          counts aren't a toggleable aid -- they're always visible, the
+          same way the tile board itself always shows its true tile count
+          just by however many boxes are on screen. This just makes the
+          word count explicit too, since (unlike letters) there's no boxes
+          to count for it -- word boundaries are never shown structurally. */}
+      <p className="guess-panel__length-hint">
+        Answer is {slotPattern.length} letter{slotPattern.length === 1 ? '' : 's'}, {wordCount} word
+        {wordCount === 1 ? '' : 's'}.
+      </p>
 
       <TileBoard ref={tileBoardRef} slotPattern={slotPattern} letters={letters} onLetterChange={setLetter} />
 

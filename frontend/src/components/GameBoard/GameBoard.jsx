@@ -83,6 +83,7 @@ export default function GameBoard() {
         <GuessPanel
           key={state.challenge_date}
           slotPattern={state.slot_pattern}
+          wordCount={state.word_count}
           dateStr={state.challenge_date}
           onSubmit={submitGuess}
           onPass={submitPass}

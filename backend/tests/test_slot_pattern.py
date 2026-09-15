@@ -1,4 +1,4 @@
-from backend.app.lib.slot_pattern import normalize_to_tiles, tile_shape
+from backend.app.lib.slot_pattern import normalize_to_tiles, tile_shape, word_count
 
 
 def test_single_word():
@@ -38,3 +38,24 @@ def test_manual_transliteration_for_non_decomposable_letters():
 def test_normalize_to_tiles_preserves_case_and_kept_punctuation():
     assert normalize_to_tiles("Spider-Man") == "Spider-Man"
     assert normalize_to_tiles("Albert Einstein") == "Albert Einstein"
+
+
+def test_word_count_single_word_regardless_of_internal_punctuation():
+    assert word_count("Armageddon") == 1
+    assert word_count("Spider-Man") == 1
+
+
+def test_word_count_splits_on_space_even_before_kept_punctuation():
+    # The space before "(element)" is still a space -- kept punctuation
+    # only avoids splitting when it isn't preceded by one.
+    assert word_count("Mercury (element)") == 2
+
+
+def test_word_count_splits_only_on_space():
+    assert word_count("George Clooney") == 2
+    assert word_count("Albert Einstein") == 2
+    assert word_count("Apollo 11") == 2
+
+
+def test_word_count_three_words():
+    assert word_count("The Great Escape") == 3

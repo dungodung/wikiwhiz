@@ -82,6 +82,7 @@ def test_today_shows_fresh_state_without_creating_a_session(client, db, fixture_
     assert len(data["clues_revealed"]) == 1
     assert data["total_clues_available"] == 5
     assert data["slot_pattern"] == "L" * 15
+    assert data["word_count"] == 2
     assert data["guesses"] == []
     assert "wikiwhiz_anon" in resp.headers.get("Set-Cookie", "")
 
