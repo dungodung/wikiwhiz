@@ -26,12 +26,14 @@ def create_app(config_name: str = "production") -> Flask:
     from .blueprints.auth.routes import auth_bp
     from .blueprints.game.routes import game_bp
     from .blueprints.info.routes import info_bp
+    from .blueprints.push.routes import push_bp
     from .blueprints.stats.routes import stats_bp
 
     app.register_blueprint(game_bp, url_prefix="/api/game")
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(stats_bp, url_prefix="/api/stats")
     app.register_blueprint(info_bp, url_prefix="/api/info")
+    app.register_blueprint(push_bp, url_prefix="/api/push")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     @app.route("/", defaults={"path": ""})

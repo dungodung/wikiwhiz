@@ -41,6 +41,19 @@ export const api = {
   setThemePreference: (theme) => request('/auth/theme', { method: 'PATCH', body: JSON.stringify({ theme }) }),
   myStats: () => request('/stats/me'),
 
+  push: {
+    // endpoint is optional -- passing this browser's lets the server say
+    // whether *this* device is registered, not just the account overall.
+    getSettings: (endpoint) =>
+      request(`/push/settings${endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : ''}`),
+    updateSettings: (body) =>
+      request('/push/settings', { method: 'PATCH', body: JSON.stringify(body) }),
+    subscribe: (body) => request('/push/subscribe', { method: 'POST', body: JSON.stringify(body) }),
+    unsubscribe: (endpoint) =>
+      request('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+    sendTest: () => request('/push/test', { method: 'POST' }),
+  },
+
   admin: {
     listUsers: (q = '', page = 1, sort) =>
       request(`/admin/users?q=${encodeURIComponent(q)}&page=${page}${sortQuery(sort)}`),

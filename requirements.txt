@@ -3,7 +3,10 @@ flask-sqlalchemy==3.1.1
 flask-migrate==4.0.7
 sqlalchemy==2.0.36
 pymysql==1.1.1
-cryptography==43.0.3
+# Bumped from 43.0.3 for pywebpush/py-vapid, which need a newer cryptography
+# for the ECDH/VAPID primitives. Full backend suite verified green on this.
+cryptography==50.0.1
+pywebpush==2.5.0
 gunicorn==23.0.0
 requests==2.32.3
 rapidfuzz==3.14.5

@@ -53,6 +53,20 @@ class BaseConfig:
     MAIL_FROM = os.environ.get("MAIL_FROM", "wikiwhiz@toolforge.org")
     MAINTAINER_EMAIL = os.environ.get("MAINTAINER_EMAIL", "")
 
+    # --- Web Push (daily reminder notifications) ------------------------
+    # VAPID keypair identifying this application server to push services.
+    # Generate once with scripts/generate_vapid_keys.py and set as envvars;
+    # the public key is handed to the browser at subscribe time, the private
+    # key signs each send and must never reach the client. With no keys
+    # configured the push endpoints report unavailable and the UI hides the
+    # feature, so a dev checkout works without any setup.
+    VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+    VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+    # Contact address pushed to the push service in the VAPID "sub" claim, so
+    # operators can reach us about a misbehaving sender. Must be a mailto:
+    # or https: URL.
+    VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:wikiwhiz@toolforge.org")
+
     ANON_COOKIE_NAME = "wikiwhiz_anon"
     ANON_COOKIE_MAX_AGE_DAYS = 400
 

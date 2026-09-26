@@ -101,6 +101,44 @@ toolforge jobs schedule check-pool-level \
 Run it once manually first to confirm mail actually reaches
 `MAINTAINER_EMAIL` before relying on the schedule.
 
+## Web Push daily reminders
+
+Players who are logged in can opt into a push reminder before the puzzle
+rolls over (header menu → "Daily reminder"). Two pieces of setup:
+
+**1. VAPID keypair.** Generate once and store as envvars:
+```
+python3 scripts/generate_vapid_keys.py
+become wikiwhiz
+toolforge envvars create VAPID_PUBLIC_KEY   # paste the value when prompted
+toolforge envvars create VAPID_PRIVATE_KEY
+toolforge envvars create VAPID_SUBJECT      # e.g. mailto:you@example.org
+```
+The keypair identifies this server to push services. **Rotating it
+invalidates every existing subscription** — browsers bind a subscription to
+the public key it was created with, so users would silently stop receiving
+reminders until they re-subscribed. Treat it as long-lived.
+
+With no keys set, the push endpoints report `supported: false` and the UI
+hides the feature, so an unconfigured deployment degrades cleanly rather
+than erroring.
+
+**2. The hourly sender job:**
+```
+toolforge jobs schedule send-push-reminders \
+  --command "/data/project/wikiwhiz/venv/bin/python3 /data/project/wikiwhiz/scripts/send_push_reminders.py" \
+  --schedule "0 * * * *" \
+  --image python3.12
+```
+Hourly is deliberate: each user picks their own lead time (1–23 hours before
+the 00:00 UTC rollover), and "is this user due" is per-user arithmetic rather
+than a property of when the job fires — so one hourly job serves every
+possible lead time. The trade-off is that a reminder lands at the top of the
+hour rather than to the minute.
+
+`--dry-run` reports who *would* be notified without sending or recording
+anything, which is the safe way to check the job before scheduling it.
+
 ## Getting content onto production
 
 Content is **authored locally** (where Claude Code runs — invoke the
