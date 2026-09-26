@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import {
   getExistingSubscription,
@@ -38,6 +38,12 @@ export default function NotificationSettings({ onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
+  // Pending debounced write of the hours field (see setHours).
+  const hoursTimer = useRef(null)
+  const pendingHours = useRef(null)
+  // Mirrored into a ref so the unmount flush below can read the latest
+  // endpoint without re-subscribing that cleanup on every change.
+  const endpointRef = useRef(null)
 
   const supported = isPushSupported()
   const permission = supported ? notificationPermission() : 'unsupported'
@@ -52,6 +58,10 @@ export default function NotificationSettings({ onClose }) {
       setError(err.message)
     }
   }, [])
+
+  useEffect(() => {
+    endpointRef.current = endpoint
+  }, [endpoint])
 
   useEffect(() => {
     // Genuinely an external-system sync: it reads the browser's existing
@@ -72,17 +82,66 @@ export default function NotificationSettings({ onClose }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  // Closing the modal within the debounce window would otherwise drop the
+  // user's last adjustment silently. Flush it on the way out -- fire and
+  // forget, since there's no component left to show a result to.
+  useEffect(
+    () => () => {
+      if (!hoursTimer.current) return
+      clearTimeout(hoursTimer.current)
+      const hours = pendingHours.current
+      if (hours == null) return
+      api.push
+        .updateSettings({ hours_before_reset: hours, endpoint: endpointRef.current })
+        .catch(() => {})
+    },
+    []
+  )
+
   const patch = async (body) => {
-    setBusy(true)
     setError(null)
     setNotice(null)
     try {
-      setSettings(await api.push.updateSettings({ ...body, endpoint }))
+      const fresh = await api.push.updateSettings({ ...body, endpoint })
+      setSettings((current) => {
+        // A response that lands while the user is still adjusting the hours
+        // must not stamp the older server value back over what they've just
+        // typed or clicked -- keep the local hours whenever another write is
+        // still queued.
+        if (hoursTimer.current) return { ...fresh, hours_before_reset: current.hours_before_reset }
+        return fresh
+      })
     } catch (err) {
       setError(err.message)
-    } finally {
-      setBusy(false)
     }
+  }
+
+  const clampHours = (value) => {
+    const hours = Math.round(Number(value))
+    if (!Number.isFinite(hours)) return settings?.hours_before_reset ?? 3
+    return Math.min(settings.max_hours, Math.max(settings.min_hours, hours))
+  }
+
+  /**
+   * Update the hours field. The displayed value changes immediately so the
+   * control stays responsive, while the server write is debounced -- holding
+   * a stepper would otherwise fire a request per click, and each response
+   * racing back would fight the user's next input.
+   */
+  const setHours = (value) => {
+    setSettings((s) => ({ ...s, hours_before_reset: value }))
+    const hours = Number(value)
+    if (!Number.isInteger(hours) || hours < settings.min_hours || hours > settings.max_hours) {
+      // Mid-typing ("" or "1" on the way to "12") -- show it, don't save it.
+      return
+    }
+    clearTimeout(hoursTimer.current)
+    pendingHours.current = hours
+    hoursTimer.current = setTimeout(() => {
+      hoursTimer.current = null
+      pendingHours.current = null
+      patch({ hours_before_reset: hours })
+    }, 400)
   }
 
   const handleEnable = async () => {
@@ -183,32 +242,58 @@ export default function NotificationSettings({ onClose }) {
               time, every day.
             </p>
 
-            <label className="notif-modal__field">
-              <span className="notif-modal__label">Remind me this long before it changes</span>
+            <div className="notif-modal__field">
+              <span className="notif-modal__label" id="notif-hours-label">
+                Remind me this long before it changes
+              </span>
               <span className="notif-modal__hours-row">
+                {/* Explicit steppers rather than the native number spinner.
+                    Its two arrows are about 8px tall each and stacked, which
+                    is a hard target to hit; worse, the old code disabled the
+                    input while the PATCH was in flight, so the browser never
+                    saw the mouseup that ends a spin and kept auto-repeating
+                    until the pointer left the field. These buttons are
+                    plain clicks with nothing disabled mid-interaction. */}
+                <button
+                  type="button"
+                  className="notif-modal__step"
+                  onClick={() => setHours(Number(settings.hours_before_reset) - 1)}
+                  disabled={Number(settings.hours_before_reset) <= settings.min_hours}
+                  aria-label="Fewer hours"
+                >
+                  −
+                </button>
                 <input
                   className="notif-modal__hours"
                   type="number"
+                  inputMode="numeric"
                   min={settings.min_hours}
                   max={settings.max_hours}
                   value={settings.hours_before_reset}
-                  disabled={busy}
-                  onChange={(e) => {
-                    const hours = Number(e.target.value)
-                    // Reflect the typed value straight away so the field
-                    // stays editable, but only persist a value the server
-                    // will actually accept.
-                    setSettings((s) => ({ ...s, hours_before_reset: e.target.value }))
-                    if (hours >= settings.min_hours && hours <= settings.max_hours) {
-                      patch({ hours_before_reset: hours })
-                    }
+                  aria-labelledby="notif-hours-label"
+                  onChange={(e) => setHours(e.target.value)}
+                  onBlur={() => {
+                    // Snap a half-typed or out-of-range entry back to
+                    // something valid when focus leaves, so the field can't
+                    // be left showing a number that was never saved.
+                    const hours = clampHours(settings.hours_before_reset)
+                    if (String(hours) !== String(settings.hours_before_reset)) setHours(hours)
                   }}
                 />
+                <button
+                  type="button"
+                  className="notif-modal__step"
+                  onClick={() => setHours(Number(settings.hours_before_reset) + 1)}
+                  disabled={Number(settings.hours_before_reset) >= settings.max_hours}
+                  aria-label="More hours"
+                >
+                  +
+                </button>
                 <span className="notif-modal__hours-unit">
                   hour{Number(settings.hours_before_reset) === 1 ? '' : 's'}
                 </span>
               </span>
-            </label>
+            </div>
 
             <p className="notif-modal__sendtime">
               You&apos;ll be nudged at{' '}

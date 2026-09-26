@@ -254,13 +254,49 @@ body {
 }
 
 .notif-modal__hours {
-  width: 5rem;
+  width: 3.25rem;
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   color: var(--color-text);
   padding: 0.4rem 0.5rem;
   font: inherit;
+  text-align: center;
+}
+
+/* The native spin buttons are replaced by .notif-modal__step (see
+   NotificationSettings.jsx for why), so hide them rather than leaving two
+   competing sets of controls in the same field. */
+.notif-modal__hours::-webkit-outer-spin-button,
+.notif-modal__hours::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.notif-modal__hours {
+  appearance: textfield;
+}
+
+.notif-modal__step {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notif-modal__step:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.notif-modal__step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .notif-modal__hours-unit {
