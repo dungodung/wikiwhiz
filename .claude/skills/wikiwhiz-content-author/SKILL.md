@@ -5,7 +5,7 @@ description: Use when the user asks to generate new WikiWhiz daily-challenge con
 
 # WikiWhiz content author
 
-Selects good candidate English Wikipedia articles, gathers a 5-7 clue set for
+Selects good candidate English Wikipedia articles, gathers a 7-clue set for
 each spanning several clue types, precomputes the degrees-of-Wikipedia link
 cache, and schedules each article onto the next open daily-challenge date.
 Everything is written through the helper scripts in `scripts/` — never write
@@ -68,17 +68,45 @@ and scripts are run from the repo root with the venv active, e.g.:
    early) to 7 (revealing, shown late); see the style guide for defaults per
    clue type.
 
-7. **Reach 5-7 valid clues.** If fewer than 5 of the "applicable" types
-   panned out, add an extra fact-based clue (a second Wikidata statement,
-   `creation_year`, or `langlinks_count`) rather than forcing a weak or
-   leaky clue into an inapplicable type.
+7. **Reach exactly 7 valid clues — this is the target, not a range.** The
+   `--set-status ready` gate in step 9 only enforces >=5, so it will happily
+   let a 6-clue article through; that is not good enough and has had to be
+   backfilled after the fact. Keep going until there are 7. If fewer than 7
+   of the "applicable" types panned out, add an extra fact-based clue (a
+   second Wikidata statement, a second category/section fact, `creation_year`,
+   or `langlinks_count`) rather than forcing a weak or leaky clue into an
+   inapplicable type. Verify with
+   `SELECT COUNT(*) FROM clues WHERE article_id = N` before moving on.
 
-8. **Precompute the degrees-of-Wikipedia cache:**
+8. **Precompute the degrees-of-Wikipedia cache — via the Wiki Replica, not
+   the API:**
    `python3 scripts/precompute_link_cache.py --article-id N`
-   (defaults: depth 4, node cap 3000 — override with `--max-depth`/`--node-cap`
-   if needed). This can take a little while; it's making real API calls.
+   (defaults: depth 4, node cap 3000 — use these, don't reduce them).
 
-9. **Promote to ready** (the script itself gates on >=5 non-leaking clues):
+   The script prints which link source it chose. It **must** say
+   `Link source: Wiki Replicas (SQL)`. If it says
+   `MediaWiki API (fallback)`, stop and fix the replica path first rather
+   than proceeding — the API path is for when the replica is genuinely
+   unreachable, not a normal choice. It's hundreds of sequential paginated
+   HTTP calls instead of one indexed JOIN, and in practice it stalls out on
+   well-linked articles and yields a degraded cache.
+
+   `wiki_replica.get_client()` picks the replica whenever `replica.my.cnf`
+   exists and the replica host is reachable, and honors
+   `WIKI_REPLICA_CNF_PATH` / `WIKI_REPLICA_HOST` / `WIKI_REPLICA_PORT`.
+   From a dev machine (where neither is true by default), tunnel through the
+   Toolforge bastion and point those env vars at the local end:
+   ```
+   ssh -f -N -L 4711:enwiki.analytics.db.svc.wikimedia.cloud:3306 <you>@login.toolforge.org
+   # replica.my.cnf lives at /data/project/wikiwhiz/replica.my.cnf on the
+   # bastion; copy it somewhere local with 0600 perms (it's a credential)
+   export WIKI_REPLICA_CNF_PATH=/path/to/local/replica.my.cnf
+   export WIKI_REPLICA_HOST=127.0.0.1
+   export WIKI_REPLICA_PORT=4711
+   ```
+
+9. **Promote to ready** (the script's own gate is only >=5 non-leaking clues
+   — step 7's 7-clue target is the real bar):
    `python3 scripts/db_add_article.py --set-status ready --article-id N`
 
 10. **Schedule it** onto the next open UTC date:
