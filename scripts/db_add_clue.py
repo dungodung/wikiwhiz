@@ -10,15 +10,22 @@ Independent of whatever self-check Claude did while drafting the clue text,
 this script refuses (exit 1, nothing written) to insert any clue whose text
 contains the article's title or display title as a case-insensitive
 substring. On failure, redraft the clue text and try again.
+
+If the article is already scheduled, the challenge's frozen clue_order is
+recomputed to include the new clue -- otherwise the clue would exist in the
+database but be unreachable in play. See
+backend/app/lib/scheduling.py::sync_clue_order.
 """
 
 import argparse
 import json
 import sys
+from datetime import date
 
 from _db import session_scope
 
 from backend.app.lib.clue_guard import leaks_title
+from backend.app.lib.scheduling import sync_clue_order
 from backend.app.models.article import Article
 from backend.app.models.clue import CLUE_TYPES, Clue
 
@@ -61,6 +68,20 @@ def main() -> int:
         session.add(clue)
         session.flush()
         print(f"OK: clue_id={clue.id}")
+
+        # Keep the frozen reveal order in step with the clue set -- without
+        # this, a clue added after the article was scheduled is invisible to
+        # players forever (see sync_clue_order's docstring).
+        new_order = sync_clue_order(session, article)
+        if new_order is not None:
+            print(f"OK: clue_order refreshed -> {len(new_order)} clues")
+            challenge_date = article.daily_challenge.challenge_date
+            if challenge_date <= date.today():
+                print(
+                    f"WARNING: {challenge_date.isoformat()} is today or in the past -- "
+                    f"this changed the reveal order of a puzzle players may already have seen.",
+                    file=sys.stderr,
+                )
         return 0
 
 

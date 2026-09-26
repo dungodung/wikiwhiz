@@ -71,6 +71,39 @@ def schedule_article(session, article: Article, on_date: date | None = None) -> 
     raise SchedulingError("could not find an open challenge_date slot")
 
 
+def sync_clue_order(session, article: Article) -> list[int] | None:
+    """Recompute an already-scheduled article's frozen clue_order after its
+    clue set has changed, and return the new order (None if the article isn't
+    scheduled yet, in which case there's nothing to keep in sync -- scheduling
+    will compute the order from scratch later).
+
+    clue_order is computed once at scheduling time and frozen (see
+    compute_clue_order's module docstring for why). That means a clue added
+    to an already-scheduled article is *orphaned*: it exists in `clues` but
+    never appears in clue_order, so serialize_state -- which reveals strictly
+    from clue_order -- can never show it to a player, and the admin detail
+    view drops it too. A deleted clue leaves the mirror-image problem, a
+    dangling id that inflates total_clues_available. Both are silent; the
+    only symptom is a clue count that disagrees with itself. Calling this
+    from every path that adds or removes a clue keeps the two in step.
+
+    Re-seeded with the challenge's own id, exactly as schedule_article does,
+    so the result is what scheduling would have produced had the current clue
+    set existed then -- stable across repeated calls rather than reshuffling
+    the day every time a clue is touched.
+    """
+    challenge = article.daily_challenge
+    if challenge is None:
+        return None
+
+    clue_rows = [
+        {"id": c.id, "reveal_rank_hint": c.reveal_rank_hint}
+        for c in session.query(Clue).filter_by(article_id=article.id, is_title_leaking=False).all()
+    ]
+    challenge.clue_order = compute_clue_order(clue_rows, seed=challenge.id)
+    return challenge.clue_order
+
+
 def unschedule_article(session, challenge: DailyChallenge) -> None:
     """Removes a future scheduling and reverts the article to 'ready'. Caller
     must have already verified challenge.challenge_date is in the future.

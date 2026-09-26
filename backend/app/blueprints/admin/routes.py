@@ -19,7 +19,12 @@ from ...lib import link_cache as link_cache_lib
 from ...lib.authz import require_admin
 from ...lib.clue_guard import can_promote_to_ready, leaks_title, usable_clue_count
 from ...lib.mediawiki_api import WIKIDATA_API, MediaWikiClient
-from ...lib.scheduling import SchedulingError, schedule_article, unschedule_article
+from ...lib.scheduling import (
+    SchedulingError,
+    schedule_article,
+    sync_clue_order,
+    unschedule_article,
+)
 from ...lib.slot_pattern import tile_shape
 from ...blueprints.game.service import today_utc
 from ...models.article import Article
@@ -494,6 +499,12 @@ def create_clue():
         is_title_leaking=False,
     )
     db.session.add(clue)
+    db.session.flush()
+    # Without this the new clue is orphaned from the frozen reveal order and
+    # can never be shown -- see scheduling.sync_clue_order. Only future
+    # articles reach here (_article_is_locked rejects today/past above), so
+    # this never rewrites a puzzle anyone has played.
+    sync_clue_order(db.session, article)
     db.session.commit()
     return jsonify(_serialize_clue(clue)), 201
 
@@ -540,6 +551,10 @@ def delete_clue(clue_id: int):
         return jsonify({"error": "article_locked"}), 409
 
     db.session.delete(clue)
+    db.session.flush()
+    # Mirror image of create_clue: leaving the deleted id in clue_order would
+    # inflate total_clues_available and silently short a day by one clue.
+    sync_clue_order(db.session, article)
     db.session.commit()
     return "", 204
 
