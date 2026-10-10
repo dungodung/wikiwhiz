@@ -7,6 +7,15 @@ const CLUE_TYPES = [
   'incoming_links', 'long_section_title', 'creation_year', 'langlinks_count',
 ]
 
+const STALE_CREATION_YEAR_MESSAGE =
+  'Creation-year clues are only allowed for articles created in 2020 or later — use a fact about the subject instead.'
+
+function clueErrorMessage(err, leakMessage) {
+  if (err.data?.error === 'clue_leaks_title') return leakMessage
+  if (err.data?.error === 'stale_creation_year') return STALE_CREATION_YEAR_MESSAGE
+  return err.message
+}
+
 export function NewClueForm({ articleId, onCreated }) {
   const [clueType, setClueType] = useState(CLUE_TYPES[0])
   const [text, setText] = useState('')
@@ -21,7 +30,7 @@ export function NewClueForm({ articleId, onCreated }) {
       setText('')
       onCreated()
     } catch (err) {
-      setError(err.data?.error === 'clue_leaks_title' ? 'That clue text contains the article title — reword it.' : err.message)
+      setError(clueErrorMessage(err, 'That clue text contains the article title — reword it.'))
     }
   }
 
@@ -62,7 +71,7 @@ export function ClueRow({ number, clue, locked, onChanged, onMove, isFirst, isLa
       setEditing(false)
       onChanged()
     } catch (err) {
-      setError(err.data?.error === 'clue_leaks_title' ? 'That clue text contains the article title.' : err.message)
+      setError(clueErrorMessage(err, 'That clue text contains the article title.'))
     }
   }
 

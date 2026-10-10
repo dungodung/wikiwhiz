@@ -54,7 +54,12 @@ sets reasonable defaults, it doesn't need to be exact.
   — a date, a numeric fact, a role, a location.
 - **wikidata_fact**: phrase as a fact, not a Wikidata property dump ("has
   been recognized for contributions to X" rather than "P106: Q...").
-- **pageviews / creation_year / langlinks_count / incoming_links**: these
+- **creation_year**: only for articles created in 2020 or later, where a
+  recent year actually hints at something (a new subject, or one that only
+  recently became notable). Never for older articles — "This Wikipedia
+  article was created in 2003" tells the player nothing, and the insert
+  scripts reject it. Don't use it as filler; add another fact clue instead.
+- **pageviews / langlinks_count / incoming_links**: these
   exist as low-leakage fallbacks to reach the 5-clue minimum when the richer
   types don't pan out — see `references/candidate_criteria.md`'s "Diversify
   clue types" section. Don't reach for these first; keep them factual and

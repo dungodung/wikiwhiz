@@ -112,6 +112,45 @@ def test_create_article_and_clue_then_reject_leaking_clue(client, db, admin_user
     assert resp.status_code == 201
 
 
+def test_create_clue_rejects_pre_2020_creation_year(client, db, admin_user):
+    article = _make_ready_article(db, title="Old Article", pageid=210)
+
+    resp = client.post(
+        "/api/admin/clues",
+        json={"article_id": article.id, "clue_type": "creation_year", "clue_text": "This Wikipedia article was created in 2003."},
+    )
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "stale_creation_year"
+
+    # Same sentence filed under another type is caught too.
+    resp = client.post(
+        "/api/admin/clues",
+        json={"article_id": article.id, "clue_type": "dyk_or_notable_fact", "clue_text": "This Wikipedia article was created in 2003."},
+    )
+    assert resp.status_code == 400
+
+    resp = client.post(
+        "/api/admin/clues",
+        json={"article_id": article.id, "clue_type": "creation_year", "clue_text": "This Wikipedia article was created in 2022."},
+    )
+    assert resp.status_code == 201
+
+
+def test_update_clue_rejects_switch_to_stale_creation_year(client, db, admin_user):
+    article = _make_ready_article(db, title="Old Article", pageid=211)
+    clue = article.clues[0]
+    clue.clue_text = "This Wikipedia article was created in 2004."
+    db.session.commit()
+
+    resp = client.patch(f"/api/admin/clues/{clue.id}", json={"clue_type": "creation_year"})
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "stale_creation_year"
+
+    # A rank-only edit doesn't re-validate the text, so it still goes through.
+    resp = client.patch(f"/api/admin/clues/{clue.id}", json={"reveal_rank_hint": 4})
+    assert resp.status_code == 200
+
+
 def test_list_articles_sorts_ascending_by_created_at(client, db, admin_user):
     """Matches admin/schedule's own ordering (oldest/earliest first) --
     previously this was newest-first (created_at.desc()).

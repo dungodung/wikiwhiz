@@ -46,8 +46,10 @@ and scripts are run from the repo root with the venv active, e.g.:
    `wbgetentities`, infobox parse, smallest-size categories, Wiktionary
    etymology, Wikisource excerpt, Wikivoyage fact, pageviews REST endpoint,
    top citation, `linkshere` count, longest section title, plus
-   `creation_year`/`langlinks_count` as low-leakage fallbacks when a type
-   doesn't apply). **Facts before stats, as a hard rule, not a preference**
+   `langlinks_count` as a low-leakage fallback when a type doesn't apply).
+   **Never use `creation_year` ("This Wikipedia article was created in X")
+   unless the article was created in 2020 or later** — for older articles
+   it says nothing about the subject, and `db_add_clue.py` rejects it. **Facts before stats, as a hard rule, not a preference**
    — see `references/candidate_criteria.md`'s "Facts before stats" section:
    exhaust the fact types (categories, sections, DYK, Wikidata, infobox,
    etymology, images, citations, Wikisource, Wikivoyage) before reaching for
@@ -73,8 +75,8 @@ and scripts are run from the repo root with the venv active, e.g.:
    let a 6-clue article through; that is not good enough and has had to be
    backfilled after the fact. Keep going until there are 7. If fewer than 7
    of the "applicable" types panned out, add an extra fact-based clue (a
-   second Wikidata statement, a second category/section fact, `creation_year`,
-   or `langlinks_count`) rather than forcing a weak or leaky clue into an
+   second Wikidata statement, a second category/section fact, a second
+   notable fact from later in the article, or `langlinks_count`) rather than forcing a weak or leaky clue into an
    inapplicable type. Verify with
    `SELECT COUNT(*) FROM clues WHERE article_id = N` before moving on.
 

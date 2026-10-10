@@ -9,7 +9,9 @@ Usage:
 Independent of whatever self-check Claude did while drafting the clue text,
 this script refuses (exit 1, nothing written) to insert any clue whose text
 contains the article's title or display title as a case-insensitive
-substring. On failure, redraft the clue text and try again.
+substring. On failure, redraft the clue text and try again. It likewise
+refuses a creation-year clue for an article created before 2020 (see
+clue_guard.is_stale_creation_year).
 
 If the article is already scheduled, the challenge's frozen clue_order is
 recomputed to include the new clue -- otherwise the clue would exist in the
@@ -24,7 +26,7 @@ from datetime import date
 
 from _db import session_scope
 
-from backend.app.lib.clue_guard import leaks_title
+from backend.app.lib.clue_guard import MIN_CREATION_YEAR_FOR_CLUE, is_stale_creation_year, leaks_title
 from backend.app.lib.scheduling import sync_clue_order
 from backend.app.models.article import Article
 from backend.app.models.clue import CLUE_TYPES, Clue
@@ -50,6 +52,14 @@ def main() -> int:
             print(
                 f"REJECTED: clue text leaks the article title "
                 f"({article.display_title!r}). Redraft and retry.",
+                file=sys.stderr,
+            )
+            return 1
+
+        if is_stale_creation_year(args.type, args.text):
+            print(
+                f"REJECTED: creation-year clues are only allowed for articles created in "
+                f"{MIN_CREATION_YEAR_FOR_CLUE} or later. Use a fact-based clue instead.",
                 file=sys.stderr,
             )
             return 1

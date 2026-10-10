@@ -17,7 +17,7 @@ from sqlalchemy import and_, case, func
 from ...extensions import db
 from ...lib import link_cache as link_cache_lib
 from ...lib.authz import require_admin
-from ...lib.clue_guard import can_promote_to_ready, leaks_title, usable_clue_count
+from ...lib.clue_guard import can_promote_to_ready, is_stale_creation_year, leaks_title, usable_clue_count
 from ...lib.mediawiki_api import WIKIDATA_API, MediaWikiClient
 from ...lib.scheduling import (
     SchedulingError,
@@ -488,6 +488,8 @@ def create_clue():
         return jsonify({"error": "clue_text_required"}), 400
     if leaks_title(clue_text, article):
         return jsonify({"error": "clue_leaks_title"}), 400
+    if is_stale_creation_year(clue_type, clue_text):
+        return jsonify({"error": "stale_creation_year"}), 400
 
     clue = Clue(
         article_id=article.id,
@@ -520,17 +522,25 @@ def update_clue(clue_id: int):
         return jsonify({"error": "article_locked"}), 409
 
     payload = request.get_json(silent=True) or {}
+    new_text = clue.clue_text
+    new_type = clue.clue_type
     if "clue_text" in payload:
         new_text = payload["clue_text"].strip()
         if not new_text:
             return jsonify({"error": "clue_text_required"}), 400
         if leaks_title(new_text, article):
             return jsonify({"error": "clue_leaks_title"}), 400
-        clue.clue_text = new_text
     if "clue_type" in payload:
-        if payload["clue_type"] not in CLUE_TYPES:
+        new_type = payload["clue_type"]
+        if new_type not in CLUE_TYPES:
             return jsonify({"error": "invalid_clue_type"}), 400
-        clue.clue_type = payload["clue_type"]
+    # Checked on the merged result, since either field alone can produce a
+    # stale creation-year clue. An edit that touches neither (e.g. only the
+    # rank) is let through, so an existing clue never blocks unrelated fixes.
+    if ("clue_text" in payload or "clue_type" in payload) and is_stale_creation_year(new_type, new_text):
+        return jsonify({"error": "stale_creation_year"}), 400
+    clue.clue_text = new_text
+    clue.clue_type = new_type
     if "reveal_rank_hint" in payload:
         clue.reveal_rank_hint = payload["reveal_rank_hint"]
     if "clue_media_url" in payload:
