@@ -44,8 +44,7 @@ one primary language runtime per image — the Python buildpack can't also run
 `main` never contains built frontend assets (`frontend/dist/`,
 `backend/app/static/*` are gitignored). The `deploy` branch is `main` plus the prebuilt
 frontend, and it is what Toolforge actually builds from. It is rebuilt by
-hand (`.gitlab-ci.yml` is a leftover from a planned GitLab setup and never
-runs, since the repo lives on GitHub):
+hand (there is no CI doing it):
 ```
 ./scripts/build_frontend.sh
 git checkout -B deploy
