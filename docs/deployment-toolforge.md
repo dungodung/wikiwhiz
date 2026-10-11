@@ -1,7 +1,8 @@
-# GitLab → Toolforge deployment runbook
+# GitHub → Toolforge deployment runbook
 
-WikiWhiz deploys to Wikimedia Toolforge via **Build Service** (git push
-triggers an automatic container build), not the traditional rsync-based
+WikiWhiz deploys to Wikimedia Toolforge via **Build Service** (a
+`toolforge build start` builds a container image from the `deploy` branch of
+the GitHub repo), not the traditional rsync-based
 Kubernetes backend. This matters because Build Service images support only
 one primary language runtime per image — the Python buildpack can't also run
 `npm run build` — so the React frontend is always built to static assets
@@ -32,17 +33,19 @@ one primary language runtime per image — the Python buildpack can't also run
    "Getting content onto production" below for the full working incantation,
    including two more non-obvious gotchas: the actual database name and a
    TLS quirk).
-4. **Create the GitLab repo** at
-   `gitlab.wikimedia.org/toolforge-repos/wikiwhiz` (via the Toolforge tool
-   dashboard, which provisions this automatically) and add it as a remote.
+4. **Source repo**: `https://github.com/dungodung/wikiwhiz.git` (`origin`).
+   Build Service clones it directly, so it must stay public. (There is no
+   GitLab mirror -- `toolforge build start` against
+   `gitlab.wikimedia.org/toolforge-repos/wikiwhiz` fails with "failed to
+   resolve ref".)
 
 ## The `deploy` branch
 
 `main` never contains built frontend assets (`frontend/dist/`,
-`backend/app/static/*` are gitignored). `.gitlab-ci.yml` builds the frontend
-and force-pushes the result onto a `deploy` branch on every push to `main`
-— that branch is what Toolforge actually builds from. To do this manually
-instead of relying on CI:
+`backend/app/static/*` are gitignored). The `deploy` branch is `main` plus the prebuilt
+frontend, and it is what Toolforge actually builds from. It is rebuilt by
+hand (`.gitlab-ci.yml` is a leftover from a planned GitLab setup and never
+runs, since the repo lives on GitHub):
 ```
 ./scripts/build_frontend.sh
 git checkout -B deploy
@@ -73,13 +76,13 @@ toolforge env set SMTP_HOST "mail.tools.wmcloud.org"
 flask --app wsgi db upgrade
 
 # build & start
-toolforge build start https://gitlab.wikimedia.org/toolforge-repos/wikiwhiz --ref deploy
+toolforge build start https://github.com/dungodung/wikiwhiz.git --ref deploy
 toolforge build show   # wait for "ok (Succeeded)"
 toolforge webservice buildservice start --mount=none
 ```
 
-Redeploy after a code change: push `main`, let CI (or the manual steps
-above) update `deploy`, then re-run `toolforge build start` +
+Redeploy after a code change: push `main`, rebuild and force-push `deploy`
+with the steps above, then re-run `toolforge build start` +
 `toolforge webservice buildservice restart`.
 
 ## Verify
