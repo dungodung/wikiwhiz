@@ -23,3 +23,9 @@ def test_disjoint_character_sets_score_near_zero():
 def test_diacritics_and_case_are_ignored():
     raw = score_lexical("cafe", "CAFÉ")
     assert raw == 1.0
+
+
+def test_first_letter_typo_that_changes_word_sort_order_still_scores_high():
+    # "comodo" sorts before "dragon" but "komodo" sorts after it, which used
+    # to wreck token_sort_ratio and drop this one-letter typo to "Warm".
+    assert bucket_lexical(score_lexical("Comodo dragon", "Komodo dragon")) >= 17

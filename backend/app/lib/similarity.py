@@ -27,8 +27,13 @@ def score_lexical(guess_text: str, answer_title: str) -> float:
     b = normalize_text(answer_title)
     if not a or not b:
         return 0.0
-    token_sort = fuzz.token_sort_ratio(a, b) / 100.0
     char_ratio = fuzz.ratio(a, b) / 100.0
+    # token_sort sorts words alphabetically before comparing, so a typo in a
+    # word's first letter can flip the sort order and tank the score
+    # ("comodo dragon" stays put, "komodo dragon" -> "dragon komodo"). Taking
+    # the max with the plain ratio keeps reorder tolerance without letting it
+    # ever score below straight character-level closeness.
+    token_sort = max(fuzz.token_sort_ratio(a, b) / 100.0, char_ratio)
     return 0.6 * token_sort + 0.4 * char_ratio
 
 
